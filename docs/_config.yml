@@ -1,0 +1,17 @@
+title: BelmontUI
+description: Mods Settings tab library for Castlevania Belmont's Curse (BepInEx 6 IL2CPP)
+remote_theme: just-the-docs/just-the-docs@v0.10.1
+plugins:
+  - jekyll-remote-theme
+  - jekyll-seo-tag
+url: https://leandrobueno.github.io
+baseurl: /BelmontUI
+color_scheme: dark
+search_enabled: true
+heading_anchors: true
+aux_links:
+  GitHub: https://github.com/leandrobueno/BelmontUI
+  llms.txt: https://leandrobueno.github.io/BelmontUI/llms.txt
+footer_content: "BelmontUI is MIT licensed. Not affiliated with the game's publisher."
+include:
+  - llms.txt

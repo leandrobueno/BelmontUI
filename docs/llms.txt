@@ -1,0 +1,20 @@
+# BelmontUI
+
+> BelmontUI is a BepInEx 6 IL2CPP library for Castlevania: Belmont's Curse mods. It adds a MODS SETTINGS tab to the game's pause menu and title-screen Settings, listing each registered mod with a sub-menu built from the game's own widgets. Mods soft-depend on it (GUID `leandrobueno.belmontui`, namespace `BelmontUi`) and register settings once in `Load()` with `BelmontUi.Settings.Register(guid, title, menu => ...)` or `Settings.RegisterFromConfig(guid, title, Config)`. Every `BelmontUi.*` reference must live in a class entered only after `IL2CPPChainloader.Instance.Plugins.ContainsKey("leandrobueno.belmontui")`, or the mod throws FileNotFoundException without the library. MIT licensed. Current version 0.2.0.
+
+## Docs
+
+- [Getting started](https://leandrobueno.github.io/BelmontUI/getting-started): install, requirements, csproj reference, the soft-dependency pattern with a full glue-class example
+- [API reference](https://leandrobueno.github.io/BelmontUI/api): Settings, SettingsMenu, every builder method (Toggle, Slider, IntSlider, Choice, Key, Button, ResetButton), RegisterFromConfig rules, validation errors, when values save
+- [Recipes](https://leandrobueno.github.io/BelmontUI/recipes): three-setting mod, Config.Bind-only menu, key setting, reset button, action button, run-time replacement
+- [How it works](https://leandrobueno.github.io/BelmontUI/how-it-works): tab placement, Belmont Minimap coexistence, native widget cloning, saving, failure on game updates
+- [Troubleshooting](https://leandrobueno.github.io/BelmontUI/troubleshooting): log lines, "no tab" checklist, compatibility
+
+## For agents
+
+- [AGENTS.md](https://github.com/leandrobueno/BelmontUI/blob/main/AGENTS.md): everything needed to add BelmontUI support to a mod without reading the source
+
+## Optional
+
+- [Changelog](https://leandrobueno.github.io/BelmontUI/changelog): versions 0.1.0 to 0.2.0
+- [Source](https://github.com/leandrobueno/BelmontUI)

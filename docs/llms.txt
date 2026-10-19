@@ -12,7 +12,7 @@
 
 ## For agents
 
-- [AGENTS.md](https://github.com/leandrobueno/BelmontUI/blob/main/AGENTS.md): everything needed to add BelmontUI support to a mod without reading the source
+- [AGENTS.md](https://github.com/leandrobueno/BelmontUI/blob/master/AGENTS.md): everything needed to add BelmontUI support to a mod without reading the source
 
 ## Optional
 

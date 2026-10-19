@@ -34,8 +34,8 @@ The dependency is optional. A mod that uses BelmontUI still loads and works with
 
 ## For AI coding agents
 
-The repository's [AGENTS.md](https://github.com/leandrobueno/BelmontUI/blob/main/AGENTS.md) lets Claude, Codex, Cursor and similar agents add BelmontUI support to a mod without reading the source. A machine-readable index of this site is at [llms.txt](llms.txt).
+The repository's [AGENTS.md](https://github.com/leandrobueno/BelmontUI/blob/master/AGENTS.md) lets Claude, Codex, Cursor and similar agents add BelmontUI support to a mod without reading the source. A machine-readable index of this site is at [llms.txt](llms.txt).
 
 ## License
 
-MIT. See [LICENSE](https://github.com/leandrobueno/BelmontUI/blob/main/LICENSE).
+MIT. See [LICENSE](https://github.com/leandrobueno/BelmontUI/blob/master/LICENSE).

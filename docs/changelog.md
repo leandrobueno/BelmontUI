@@ -5,14 +5,29 @@ nav_order: 7
 
 # Changelog
 
-Versions 0.1.0 to 0.2.0 were built on 2026-10-19, each 0.1.x after an in-game test of the one before. 0.1.9 is the first version committed to git, and the first one the author confirmed has no visual issues.
+Every version from 0.1.0 to 0.2.2 was built on 2026-10-19; each later one followed an in-game test of the one before. 0.1.9 was the first state the author confirmed has no visual issues. 0.2.2 is the current version, tested in game with the mod list, sub-menus and Back working.
+
+| Version | Git commit |
+|---|---|
+| 0.2.2 | `0d1b056` (includes 0.2.0 and 0.2.1) |
+| 0.1.9 | `b917e54` (includes 0.1.0 to 0.1.8) |
+
+## 0.2.2
+
+- The summary on the mod list reads in full. It is first placed from a quarter of the row to the button, then moved to just after the mod's name the first frame the row is drawn. In 0.2.1 the name was measured before the row had ever been shown, came out several times too wide, and the summary was cut to "Cast up to...".
+
+## 0.2.1
+
+- The first opening of the tab shows only the mod list. In 0.2.0 it also showed most rows of every sub-menu under the list: a focus step from 0.1.3 that re-activates faded objects also re-activated the rows the list had hidden.
+- The summary starts right after the mod's name and uses the width up to the button.
 
 ## 0.2.0
 
-- The tab opens on a **list of registered mods**: title, one-line summary and a **Settings** button each. Each mod's settings are a sub-menu with a Back action (B, Esc, Backspace, or the Back row).
-- `SettingsPage` is renamed `SettingsMenu`; the builder methods are unchanged.
-- XML documentation for the whole public API, shipped as `BelmontUI.xml`.
-- `Summary` on menus, and an optional `summary` parameter on `Register` and `RegisterFromConfig`.
+- The tab opens on a **list of registered mods**: title, one-line summary and a **Settings** button each. Each mod's settings are a sub-menu titled with the mod's name, with the Settings screen's open and close sounds.
+- **Back** with B, Esc, Backspace or the Back row. While a sub-menu is open, the game's Close / Cancel / Back input actions are suspended, so B doesn't close the pause menu.
+- API: `SettingsPage` is renamed `SettingsMenu`; the builder methods are unchanged. `SettingsMenu.Summary`, and an optional `summary` parameter on `Register` and `RegisterFromConfig`.
+- XML documentation for the whole public API. The build writes `BelmontUI.xml` next to the dll, so IDEs show the descriptions.
+- An object-style API (public row objects) was tried during 0.2.0 and made internal again before release. The builder methods are the only way to add rows.
 
 ## 0.1.9
 

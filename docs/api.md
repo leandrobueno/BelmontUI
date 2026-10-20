@@ -6,10 +6,21 @@ nav_order: 3
 # API reference
 {: .no_toc }
 
-Version 0.2.0. Everything is in the `BelmontUi` namespace. The public surface uses plain .NET types only (`ConfigEntryBase`, `ConfigFile`, strings, numbers, `Action`), so it does not change when the game's interop assemblies are regenerated. The dll ships with `BelmontUI.xml`, so your IDE shows these descriptions as tooltips.
+Version 0.2.2. Everything is in the `BelmontUi` namespace. The public surface uses plain .NET types only (`ConfigEntryBase`, `ConfigFile`, strings, numbers, `Action`), so it does not change when the game's interop assemblies are regenerated. The dll ships with `BelmontUI.xml`, so your IDE shows these descriptions as tooltips.
 
 1. TOC
 {:toc}
+
+## What is public
+
+| Type | Public members | For |
+|---|---|---|
+| `Settings` (static) | `Register`, `RegisterFromConfig`, `Get`, `Unregister` | your mod |
+| `SettingsMenu` (sealed, no public constructor) | `Id`, `Title`, `Summary`, `Toggle`, `Slider`, `IntSlider`, `Choice`, `Key`, `Button`, `ResetButton`, `ResetAll`, `Save` | your mod |
+| `BelmontUiPlugin` | `Guid`, `Version`, `Load` | BepInEx |
+| `BelmontUiWatcher` | a Unity component | BelmontUI itself; don't add or call it |
+
+Everything else is internal: the row type and its kinds, the menu's row list, and adding or removing rows other than through the builder methods. A menu can't be created without registering it, and rows can't be removed one by one; register the GUID again instead.
 
 ## The model
 
@@ -214,4 +225,4 @@ A control writes its `ConfigEntry` the moment it changes, so your mod's `Setting
 
 ## `BelmontUiPlugin`
 
-The plugin class. `BelmontUiPlugin.Guid` is `"leandrobueno.belmontui"` and `BelmontUiPlugin.Version` is `"0.2.0"`. Copy the GUID string into a constant of your own instead, as the examples do. That keeps every `BelmontUi.*` reference out of your plugin class.
+The plugin class. `BelmontUiPlugin.Guid` is `"leandrobueno.belmontui"` and `BelmontUiPlugin.Version` is `"0.2.2"`. Copy the GUID string into a constant of your own instead, as the examples do. That keeps every `BelmontUi.*` reference out of your plugin class.

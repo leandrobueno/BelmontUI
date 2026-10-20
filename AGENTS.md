@@ -1,6 +1,6 @@
 # BelmontUI for AI coding agents
 
-BelmontUI is a BepInEx 6 (IL2CPP) library for Castlevania: Belmont's Curse. It adds a **Mods Settings** tab to the game's pause menu and to the title screen's Settings screen. A mod declares its settings once, in `Load()`, and the player gets them in the game's own widgets. This file lets you add that support to a mod without reading BelmontUI's source. Facts are taken from `Settings.cs`, `SettingsMenu.cs`, `SettingRow.cs` and `Plugin.cs` at version 0.2.0. The dll ships `BelmontUI.xml`, so IDE tooltips carry the same descriptions.
+BelmontUI is a BepInEx 6 (IL2CPP) library for Castlevania: Belmont's Curse. It adds a **Mods Settings** tab to the game's pause menu and to the title screen's Settings screen. A mod declares its settings once, in `Load()`, and the player gets them in the game's own widgets. This file lets you add that support to a mod without reading BelmontUI's source. Facts are taken from `Settings.cs`, `SettingsMenu.cs`, `SettingRow.cs` and `Plugin.cs` at version 0.2.2. The dll ships `BelmontUI.xml`, so IDE tooltips carry the same descriptions.
 
 ## Facts
 
@@ -8,7 +8,7 @@ BelmontUI is a BepInEx 6 (IL2CPP) library for Castlevania: Belmont's Curse. It a
 |---|---|
 | Plugin GUID | `leandrobueno.belmontui` |
 | Namespace | `BelmontUi` (lower-case `i`) |
-| Public types | `BelmontUi.Settings` (static) and `BelmontUi.SettingsMenu` (builder methods). Everything else is internal. |
+| Public types | `BelmontUi.Settings` (static) and `BelmontUi.SettingsMenu` (builder methods) are the API. `BelmontUiPlugin` (with `Guid`, `Version`) and the `BelmontUiWatcher` component are public but not for consumers. Row types and row lists are internal. |
 | Dll installed at | `<game>\BepInEx\plugins\BelmontUI\BelmontUI.dll` |
 | Target | net6.0, BepInEx 6 IL2CPP (be.788) |
 | Config saved to | the consumer mod's own `BepInEx\config\<mod guid>.cfg`. BelmontUI writes `ConfigEntry.BoxedValue` at once and calls `ConfigFile.Save()` when the player leaves a sub-menu, the tab loses focus or the menu closes. It has no config file of its own. |
@@ -135,11 +135,13 @@ AbilityWheel wraps `Lib.Register()` in `try/catch` inside the glue class to log 
 ## Verify in game
 
 1. Put BelmontUI and the mod in `BepInEx\plugins` and start the game.
-2. Pause menu top bar: a **MODS SETTINGS** tab after SYSTEM, and after Belmont Minimap's MODS when that mod is installed. The title screen's Settings has the same tab. It lists registered mods, each with a **Settings** button. B, Esc, Backspace or the Back row return to the list.
+2. Pause menu top bar: a **MODS SETTINGS** tab after SYSTEM, and after Belmont Minimap's MODS when that mod is installed. The title screen's Settings has the same tab. It opens on a list of registered mods sorted by title, one row each with the title, the `summary` and a **Settings** button. The button opens the mod's rows as a sub-menu titled with the mod's title. B, Esc, Backspace or the **Back** row return to the list; while the sub-menu is open, B does not close the pause menu.
 3. `BepInEx\LogOutput.log` should contain:
    - `Belmont UI loaded`
    - `[ui] <your guid>: settings page '<title>' registered (<n> settings)`
    - `[ui] Mods Settings tab added to '...'` once a menu is up
+   - `[ui] Mods Settings: <n> mod(s) [<titles>], <m> rows in all` when the rows are built
+   - `[ui] '<title>' opened (...)` and `[ui] '<title>' closed (...)` around the sub-menu
    - with Minimap: `[ui] Belmont Minimap is installed: waiting for its MODS tab ...` then `[ui] Belmont Minimap's MODS tab is there; adding Mods Settings after it`
 4. Failure lines: `[ui] Mods Settings tab not added to '...': <why>` means a game update changed the menus; the game's own menu is left untouched. `[ui] <guid>: row '<label>' not added: ...` names a single row.
 5. Remove `BepInEx\plugins\BelmontUI` and start again. The mod must still load, with no `FileNotFoundException` in the log.

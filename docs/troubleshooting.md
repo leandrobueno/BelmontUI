@@ -18,6 +18,9 @@ Open `BepInEx\LogOutput.log` in the game folder after starting the game. Lines f
 | `Belmont UI loaded` | The library itself loaded. |
 | `[ui] <guid>: settings page '<title>' registered (<n> settings)` | A mod registered its menu. |
 | `[ui] Mods Settings tab added to '<bar>' (page from '<source>' ...)` | The tab exists in that menu. |
+| `[ui] Mods Settings: <n> mod(s) [<titles>], <m> rows in all` | The mod list was built with these mods. |
+| `[ui] '<title>' opened (...)` / `[ui] '<title>' closed (...)` | A mod's sub-menu was opened or closed. |
+| `[ui] sub-menu: the game's back actions are off while it is open: [...]` | The input actions suspended so B returns to the list. Logged once. |
 | `[ui] Belmont Minimap is installed: waiting for its MODS tab before adding Mods Settings` | Minimap is there; BelmontUI waits for it. |
 | `[ui] Belmont Minimap's MODS tab is there; adding Mods Settings after it` | The wait ended normally. |
 | `[ui] Mods Settings tab not added to '<bar>': <why>` | Building the tab failed; the game's menu is untouched. |
@@ -46,6 +49,10 @@ For more detail, set `LogLevels = All` in `BepInEx\config\BepInEx.cfg` (section 
 ## "My mod doesn't load without BelmontUI"
 
 The log shows `FileNotFoundException: Could not load file or assembly 'BelmontUI'`. A `BelmontUi.*` type is mentioned outside the isolated glue class: in the plugin class, in a field, in a method signature, or in a method that also runs when the library is absent. Move it into the glue class. A `try/catch` cannot fix this, because the exception happens while the method is compiled. See [the soft-dependency pattern](getting-started#the-soft-dependency-pattern).
+
+## "B closes the whole menu instead of going back to the list"
+
+Look for the `back actions are off` line. If it is missing or the list is empty, the game's back action has a name BelmontUI doesn't recognise (it looks for Close, Cancel or Back). Use the **Back** row meanwhile and report the line with your game version.
 
 ## A setting doesn't stick
 

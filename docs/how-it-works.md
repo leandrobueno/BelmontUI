@@ -44,13 +44,23 @@ Whether Minimap is installed is decided on the first poll, not at load: BelmontU
 2. **The top-bar toggle** is a copy of the bar's last visible toggle, relabelled. On every poll it is matched to a native toggle (sizes, layout, text settings, images) while both are off, so it stays identical.
 3. **The rows** are copies of native rows: the checkbox row for toggles, the slider row for sliders, the list row for choices and keys. The game's binding component is stripped and the Doozy control is driven against your `ConfigEntry`. Localizers are stripped so your texts stay. Controller navigation uses the same selectable the native page uses for that kind of row.
 4. **Buttons** are a copy of the System page's framed button, placed where other rows have their control. Before the pause menu has been opened once there is nothing to copy, so on the title screen a button row shows a checkbox that works the same.
-5. **The mod list**: one row per registered mod, sorted by title (case-insensitive), with the summary and a **Settings** button. Each mod's rows and a **Back** row form its sub-menu. While a sub-menu is open, the game's Close / Cancel / Back input actions are switched off, so B goes back to the list instead of closing the menu.
+5. **The mod list**: a copy of the checkbox row per registered mod, with the title as its label, the summary as a smaller copy of the label, and a copied System-tab button captioned **Settings**. See [the mod list and sub-menus](#the-mod-list-and-sub-menus).
 6. **Sounds**: value changes play the native row's change sound; opening, closing and reset play the Settings screen's sounds.
+
+## The mod list and sub-menus
+
+On every rebuild, BelmontUI builds all rows at once: one list row per registered mod, sorted by title (case-insensitive), then each mod's rows followed by a **Back** row. The list and the sub-menus only switch which rows are active, so moving between them doesn't rebuild anything. The log gets `[ui] Mods Settings: <n> mod(s) [<titles>], <m> rows in all`. With no mod registered, the page shows one line: "No mod has registered settings."
+
+- **The summary** starts just after the mod's name and runs up to the button. Its position is fixed the first frame the list row is drawn, because a name measured before it is shown comes out too wide.
+- **Opening.** Pressing a list row's **Settings** button opens the sub-menu on the next frame. The page title becomes the mod's title and the first row is selected. The Settings screen's open sound plays, and the log gets `[ui] '<title>' opened (...)`.
+- **Back.** B, Esc, Backspace or the **Back** row close the sub-menu. The mod's config files are saved, its list row is selected again, the close sound plays, and the log gets `[ui] '<title>' closed (...)`.
+- **The game's back actions.** While a sub-menu is open, every enabled input action whose name contains Close, Cancel or Back is switched off, in every enabled action map. Without that, B would also close the pause menu or the Settings screen. They are listed once in the log as `[ui] sub-menu: the game's back actions are off while it is open: [...]`. They come back once the key that closed the sub-menu is released, and at once when the tab loses focus or the menu closes.
+- **Leaving the tab.** If the tab loses focus or the menu closes while a sub-menu is open, the sub-menu closes silently and saves, and the tab opens on the list next time.
 
 ## Where saves happen
 
 - A control writes its `ConfigEntry` immediately when it changes.
-- Config files are written to disk when the player leaves a sub-menu, when the tab loses focus, when the menu closes, and when `ResetAll()` or `Save()` is called.
+- Config files are written to disk when the player leaves a mod's sub-menu (that mod's files), when the tab loses focus, when the menu closes, and when `ResetAll()` or `Save()` is called.
 - On the title screen's Settings screen, the tab reports no pending changes, so the game's apply / discard flow never asks about it.
 
 Each mod's values go to its own `BepInEx\config\<guid>.cfg`. BelmontUI has no config file.

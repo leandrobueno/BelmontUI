@@ -72,12 +72,13 @@ internal sealed class ModsTab
         internal GameObject Button;                  // a native menu button (System tab), or the cached copy
         internal Rect Control = new(0.80f, 0f, 0.18f, 1f);   // where rows have their control, normalised in the row
         internal EventReference ResetSfx, ApplySfx;  // the Settings screen's own sounds
+        internal EventReference OpenSfx, CloseSfx, SubTabSfx;
     }
 
     private sealed class BoundRow
     {
         internal SettingRow Row;
-        internal SettingsPage Page;
+        internal SettingsMenu Page;
         internal UIToggle Toggle;
         internal UISlider Slider;
         internal UIListStepper Stepper;
@@ -88,6 +89,11 @@ internal sealed class ModsTab
         internal bool Live;
         internal UIButton Button;               // button rows: the copied game button (decorative)
         internal float PressedUntil;            // button rows: pressed look until then
+        internal TMP_Text LabelText;            // the row's name label
+        internal SettingsMenu Opens;            // list rows: the menu their button opens
+        internal RectTransform SummaryRect;     // list rows: the summary text box
+        internal float SummaryCenter;
+        internal bool SummaryFitted;
         internal UISelectable Selectable => NavSelectable ?? (UISelectable)Toggle ?? (UISelectable)Slider ?? Stepper;
     }
 
@@ -180,6 +186,9 @@ internal sealed class ModsTab
                 return Fail(host, "no toggle row found to copy");
             templates.ResetSfx = settings.resetSingleSettingEvent;
             templates.ApplySfx = settings.applyChangesEvent;
+            templates.OpenSfx = settings.openTabViewEvent;
+            templates.CloseSfx = settings.closeTabViewEvent;
+            templates.SubTabSfx = settings.switchSubTabEvent;
             templates.Button = PickButton(buttonSource);
 
             // Copies are made under an inactive object, so nothing of theirs runs before the
@@ -209,7 +218,7 @@ internal sealed class ModsTab
                 BelmontUiPlugin.Logger.LogWarning("[ui] Mods Settings: no navigation group in the copied page, Up/Down may not work");
 
             string pageTitle = CaptionOf(pageSource.tabToggle);
-            FixPageTexts(settingsCopy, pageTitle);
+            var titleText = FixPageTexts(settingsCopy, pageTitle);
 
             // On the pause menu the content moves into a shell copied from a native pause-menu
             // page, so the bar's show / hide flow and the page geometry are the native ones.
@@ -248,14 +257,16 @@ internal sealed class ModsTab
             SettleToggle(toggle);
 
             var modsTab = new ModsTab(host, tab, tabObject, toggle, toggleObject, referenceToggle, toggleParent, staging, content, navigation, templates);
+            modsTab._titleText = titleText;
+            modsTab._listTitle = titleText != null ? titleText.text : null;
             LiveTabs.Add(modsTab);
             modsTab.Rebuild();
             modsTab.FitToggles();
             modsTab.EnsureRegistered(first: true);
 
             Listen(tab.onTabFocused, modsTab.OnFocused);
-            Listen(tab.onTabUnfocused, modsTab.SaveAll);
-            Listen(host.OnCloseView, modsTab.SaveAll);
+            Listen(tab.onTabUnfocused, modsTab.OnUnfocused);
+            Listen(host.OnCloseView, modsTab.OnUnfocused);
 
             BelmontUiPlugin.Logger.LogInfo(
                 $"[ui] Mods Settings tab added to '{host.Name}' (page from '{pageSource.gameObject.name}'" +
@@ -476,7 +487,7 @@ internal sealed class ModsTab
             return;
         }
         foreach (var text in copy.GetComponentsInChildren<TMP_Text>(true))
-            text.text = bound.Row.Text ?? bound.Row.Label;
+            text.text = bound.Row.Text;
 
         // Native size, scaled as a whole (frame, ornaments and caption keep their proportions)
         // to half again the height of the row's bar, like the Settings buttons on Belmont
@@ -541,10 +552,13 @@ internal sealed class ModsTab
         {
             BelmontUiPlugin.Logger.LogError($"[ui] {bound.Page.Id}: '{row.Label}' failed: {e}");
         }
-        var sfx = row.IsReset && !_templates.ResetSfx.IsNull ? _templates.ResetSfx : _templates.ApplySfx;
-        if (sfx.IsNull && _templates.Bool != null)
-            sfx = _templates.Bool.Sfx;
-        Play(sfx);
+        if (row.Sound != ButtonSound.None)
+        {
+            var sfx = row.Sound == ButtonSound.Reset && !_templates.ResetSfx.IsNull ? _templates.ResetSfx : _templates.ApplySfx;
+            if (sfx.IsNull && _templates.Bool != null)
+                sfx = _templates.Bool.Sfx;
+            Play(sfx);
+        }
         try
         {
             bound.Button?.SetState(UISelectionState.Pressed);
@@ -731,8 +745,30 @@ internal sealed class ModsTab
     // the selected row stays in view, the mouse wheel scrolls, rows outside the band hide.
     private void FrameUpdate()
     {
+        if (_waitBackRelease && !BackOrConfirmHeld())
+        {
+            _waitBackRelease = false;
+            UnblockBack();
+        }
         if (!_tab.IsFocused())
             return;
+        if (_pendingOpen != null)
+        {
+            var page = _pendingOpen;
+            _pendingOpen = null;
+            OpenPage(page);
+        }
+        if (_pendingClose)
+        {
+            _pendingClose = false;
+            ClosePage(silent: false);
+        }
+        else if (_openPage != null && BackPressed())
+        {
+            ClosePage(silent: false);
+        }
+        if (_openPage == null)
+            FitSummaries();
         var eventSystem = EventSystem.current;
         var current = eventSystem != null ? eventSystem.currentSelectedGameObject : null;
         if (current != null && IsButtonPart(current))
@@ -773,9 +809,9 @@ internal sealed class ModsTab
             var bound = _rows[i];
             if (bound.Object == null || !IsUnder(selected.transform, bound.Object.transform))
                 continue;
-            if (i == 0)
+            if (bound == FirstVisibleRow())
             {
-                SetScroll(0f);   // the first row: back to the top, header included
+                SetScroll(0f);   // the first row: back to the top
                 return;
             }
             var (top, bottom) = Extent(bound.Object.transform.TryCast<RectTransform>());
@@ -1304,40 +1340,69 @@ internal sealed class ModsTab
             SafeDestroy(rowObject);
         _rowObjects.Clear();
         _rows.Clear();
+        _owner.Clear();
         _imagesDumped = false;
 
         var pages = Settings.Snapshot();
+        // A menu registered again is a new object: the open one is found again by its GUID.
+        if (_openPage != null)
+            _openPage = pages.FirstOrDefault(p => p.Id == _openPage.Id);
+        if (_openPage == null)
+        {
+            _waitBackRelease = false;
+            UnblockBack();
+        }
+
         if (pages.Length == 0)
-            AddHeader("No mod has registered settings.");
+            AddHeader("No mod has registered settings.", null);
         foreach (var page in pages)
         {
-            AddHeader(page.Title);
+            try
+            {
+                AddModRow(page);
+            }
+            catch (Exception e)
+            {
+                BelmontUiPlugin.Logger.LogError($"[ui] {page.Id}: list row not added: {e}");
+            }
+        }
+        foreach (var page in pages)
+        {
             foreach (var row in page.Rows)
             {
                 try
                 {
-                    AddRow(page, row);
+                    AddRow(page, row, page);
                 }
                 catch (Exception e)
                 {
                     BelmontUiPlugin.Logger.LogError($"[ui] {page.Id}: row '{row.Label}' not added: {e}");
                 }
             }
+            try
+            {
+                AddBackRow(page);
+            }
+            catch (Exception e)
+            {
+                BelmontUiPlugin.Logger.LogError($"[ui] {page.Id}: Back row not added: {e}");
+            }
         }
 
-        UpdateNavigation();
+        ApplyMode();
         _builtRevision = Settings.Revision;
-        BelmontUiPlugin.Logger.LogInfo($"[ui] Mods Settings: {pages.Length} mod(s), {_rows.Count} rows");
+        BelmontUiPlugin.Logger.LogInfo(
+            $"[ui] Mods Settings: {pages.Length} mod(s) [{string.Join(", ", pages.Select(p => p.Title))}], {_rows.Count} rows in all");
     }
 
-    // The navigation group's list and the tab's default selection, from the rows' selectables.
+    // The navigation group's list and the tab's default selection, from the shown rows' selectables.
     private void UpdateNavigation()
     {
         var selectables = new List<UISelectable>();
         foreach (var row in _rows)
         {
             var selectable = row.Selectable;
-            if (selectable == null)
+            if (selectable == null || row.Object == null || !row.Object.activeSelf)
                 continue;
             selectable.interactable = true;
             selectables.Add(selectable);
@@ -1351,7 +1416,7 @@ internal sealed class ModsTab
     }
 
     // A label on its own line, copied from a row's name label.
-    private void AddHeader(string title)
+    private void AddHeader(string title, SettingsMenu owner)
     {
         var source = _templates.Bool ?? _templates.DropBool;
         var template = source.Binding.TryCast<UIBoolSettingBinding>()?.nameLabel ?? source.Binding.TryCast<UIDropdownBoolSettingBinding>()?.nameLabel;
@@ -1375,9 +1440,12 @@ internal sealed class ModsTab
         labelObject.transform.SetParent(_content, false);
         labelObject.transform.SetAsLastSibling();
         _rowObjects.Add(labelObject);
+        if (owner != null)
+            _owner[labelObject.Pointer] = owner;
     }
 
-    private void AddRow(SettingsPage page, SettingRow row)
+    // owner: the sub-menu the row belongs to; null for the list.
+    private void AddRow(SettingsMenu page, SettingRow row, SettingsMenu owner)
     {
         var bound = new BoundRow { Row = row, Page = page };
         GameObject rowObject;
@@ -1392,8 +1460,8 @@ internal sealed class ModsTab
                     LiveButtons.Add((this, bound));
                 }
                 break;
-            case RowKind.Float:
-            case RowKind.Int:
+            case RowKind.Slider:
+            case RowKind.IntSlider:
                 if (_templates.Float == null)
                 {
                     Skip(page, row, "the game has no slider row to copy");
@@ -1415,6 +1483,8 @@ internal sealed class ModsTab
         rowObject.transform.SetAsLastSibling();
         _rowObjects.Add(rowObject);
         _rows.Add(bound);
+        if (owner != null)
+            _owner[rowObject.Pointer] = owner;
     }
 
     private GameObject CopyToggleRow(SettingRow row, BoundRow bound)
@@ -1429,6 +1499,7 @@ internal sealed class ModsTab
         Object.DestroyImmediate(binding);
         Strip(rowObject);
         SetLabel(label, row.Label);
+        bound.LabelText = label;
         toggle ??= rowObject.GetComponentInChildren<UIToggle>(true);
         if (toggle == null)
             throw new InvalidOperationException("the copied toggle row has no UIToggle");
@@ -1468,6 +1539,7 @@ internal sealed class ModsTab
         SetDescription(description, row.Hint);
         Strip(rowObject);
         SetLabel(label, row.Label);
+        bound.LabelText = label;
         stepper ??= rowObject.GetComponentInChildren<UIListStepper>(true);
         if (stepper == null)
             throw new InvalidOperationException("the copied list row has no UIListStepper");
@@ -1506,6 +1578,7 @@ internal sealed class ModsTab
         Object.DestroyImmediate(binding);
         Strip(rowObject);
         SetLabel(label, row.Label);
+        bound.LabelText = label;
         slider ??= rowObject.GetComponentInChildren<UISlider>(true);
         if (slider == null)
             throw new InvalidOperationException("the copied slider row has no UISlider");
@@ -1521,13 +1594,13 @@ internal sealed class ModsTab
             bound.ValueLabel.overflowMode = TextOverflowModes.Overflow;
             bound.ValueLabel.enableAutoSizing = false;
         }
-        slider.wholeNumbers = row.Kind == RowKind.Int;
+        slider.wholeNumbers = row.Kind == RowKind.IntSlider;
         slider.minValue = row.Min;
         slider.maxValue = row.Max;
-        if (row.Step > 0f)
+        if (row.EffectiveStep > 0f)
         {
             slider.overrideStepSize = true;
-            slider.stepSizeOverrideValue = row.Step;
+            slider.stepSizeOverrideValue = row.EffectiveStep;
         }
         var sfx = template.Sfx;
         Apply(bound);
@@ -1556,6 +1629,7 @@ internal sealed class ModsTab
         SetDescription(description, row.Hint);
         Strip(rowObject);
         SetLabel(label, row.Label);
+        bound.LabelText = label;
         stepper ??= rowObject.GetComponentInChildren<UIListStepper>(true);
         if (stepper == null)
             throw new InvalidOperationException("the copied list row has no UIListStepper");
@@ -1635,7 +1709,7 @@ internal sealed class ModsTab
             return;
         try
         {
-            bound.ValueLabel.text = string.Format(bound.Row.Format ?? "{0:0.##}", bound.Row.GetNumber());
+            bound.ValueLabel.text = string.Format(bound.Row.EffectiveFormat, bound.Row.GetNumber());
         }
         catch (FormatException)
         {
@@ -1769,6 +1843,327 @@ internal sealed class ModsTab
         return path;
     }
 
+    // ---- the list and the sub-menus ----
+
+    // The tab opens on a list of the registered mods (title, summary, a Settings button); a
+    // button opens that mod's rows as a sub-menu with its title at the top. B, Esc, Backspace or
+    // the Back row at the end return to the list, with that mod's row selected. All rows are
+    // built once per rebuild; the mode only switches which are active (the layout skips the rest).
+    private SettingsMenu _openPage;           // null: the list
+    private SettingsMenu _pendingOpen;
+    private bool _pendingClose;
+    private bool _waitBackRelease;
+    private TMP_Text _titleText;
+    private string _listTitle;
+    private readonly Dictionary<IntPtr, SettingsMenu> _owner = new();   // row object -> its menu (absent: the list)
+    private readonly List<InputAction> _blockedBack = new();
+    private bool _blockLogged;
+    private bool _summaryLogged;
+
+    private static readonly string[] BackWords = { "Close", "Cancel", "Back" };
+
+    // A mod's row on the list: its title, its summary in the middle, a Settings button.
+    private void AddModRow(SettingsMenu page)
+    {
+        var row = new SettingRow
+        {
+            Label = page.Title, Kind = RowKind.Button, ButtonText = "Settings", Sound = ButtonSound.None,
+            OnPress = () => _pendingOpen = page,
+        };
+        int before = _rows.Count;
+        AddRow(page, row, null);
+        if (_rows.Count == before)
+            return;
+        var bound = _rows[_rows.Count - 1];
+        bound.Opens = page;
+        AddSummary(bound, page.Summary);
+    }
+
+    // The last row of every sub-menu, for the mouse (B, Esc and Backspace do the same).
+    private void AddBackRow(SettingsMenu page)
+    {
+        var row = new SettingRow
+        {
+            Label = "Back", Kind = RowKind.Button, ButtonText = "Back", Sound = ButtonSound.None,
+            OnPress = () => _pendingClose = true,
+        };
+        AddRow(page, row, page);
+    }
+
+    // The summary: a copy of the row's label, smaller, centred between the label and the button.
+    private void AddSummary(BoundRow bound, string summary)
+    {
+        if (string.IsNullOrEmpty(summary) || bound.LabelText == null || bound.Object == null)
+            return;
+        try
+        {
+            var rowRect = bound.Object.transform.TryCast<RectTransform>();
+            var labelRect = bound.LabelText.rectTransform;
+            float center = 0.5f;
+            if (rowRect.rect.height > 1f)
+            {
+                float y = rowRect.InverseTransformPoint(labelRect.TransformPoint(new Vector3(0f, labelRect.rect.center.y, 0f))).y;
+                center = (y - rowRect.rect.yMin) / rowRect.rect.height;
+            }
+            var copy = Object.Instantiate(bound.LabelText.gameObject, bound.Object.transform);
+            copy.name = "Summary";
+            foreach (var localizer in copy.GetComponentsInChildren<LocalizeStringEvent>(true))
+                Object.DestroyImmediate(localizer);
+            var text = copy.GetComponent<TMP_Text>();
+            text.text = summary;
+            text.alignment = TextAlignmentOptions.Center;
+            text.enableWordWrapping = false;
+            text.overflowMode = TextOverflowModes.Ellipsis;
+            if (text.enableAutoSizing)
+                text.fontSizeMax *= 0.75f;
+            else
+                text.fontSize *= 0.75f;
+            foreach (var fitter in copy.GetComponentsInChildren<ContentSizeFitter>(true))
+                Object.DestroyImmediate(fitter);
+
+            // A quarter of the row in to just before the button for now; FitSummaries moves the
+            // start to just after the mod's name once the row is on screen and its text measured.
+            var rect = copy.transform.TryCast<RectTransform>();
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = Vector2.zero;
+            rect.localScale = Vector3.one;
+            text.margin = Vector4.zero;
+            var element = copy.GetComponent<LayoutElement>() ?? copy.AddComponent<LayoutElement>();
+            element.ignoreLayout = true;
+            bound.SummaryRect = rect;
+            bound.SummaryCenter = center;
+            PlaceSummary(bound, 0.25f);
+        }
+        catch (Exception e)
+        {
+            BelmontUiPlugin.Logger.LogDebug($"[ui] '{bound.Row.Label}': summary not shown: {e.Message}");
+        }
+    }
+
+    // The summary box from start (a fraction of the row width) to just before the button area.
+    private void PlaceSummary(BoundRow bound, float start)
+    {
+        var rect = bound.SummaryRect;
+        var rowRect = bound.Object.transform.TryCast<RectTransform>();
+        float rowWidth = rowRect.rect.width;
+        float right = Mathf.Max(0.45f, _templates.Control.xMin - 0.02f);
+        start = Mathf.Clamp(start, 0.08f, right - 0.15f);
+        rect.anchorMin = rect.anchorMax = new Vector2((start + right) / 2f, bound.SummaryCenter);
+        rect.sizeDelta = new Vector2((right - start) * rowWidth, bound.LabelText.rectTransform.rect.height);
+    }
+
+    // Once a list row is on screen, its name's rendered text bounds say where the name ends; the
+    // summary then starts just after it. (Measuring before the row was shown gave a width several
+    // times too large, so 0.2.1 squeezed the summary next to the button.)
+    private void FitSummaries()
+    {
+        foreach (var bound in _rows)
+        {
+            if (bound.SummaryRect == null || bound.SummaryFitted || bound.Object == null || !bound.Object.activeInHierarchy)
+                continue;
+            bound.SummaryFitted = true;
+            try
+            {
+                var label = bound.LabelText;
+                label.ForceMeshUpdate();
+                var bounds = label.textBounds;
+                var rowRect = bound.Object.transform.TryCast<RectTransform>();
+                float rowWidth = rowRect.rect.width;
+                if (rowWidth <= 1f || bounds.size.x <= 1f)
+                    continue;
+                float nameEnd = rowRect.InverseTransformPoint(label.rectTransform.TransformPoint(new Vector3(bounds.max.x, 0f, 0f))).x;
+                float start = (nameEnd - rowRect.rect.xMin) / rowWidth + 0.03f;
+                PlaceSummary(bound, start);
+                if (!_summaryLogged)
+                {
+                    _summaryLogged = true;
+                    BelmontUiPlugin.Logger.LogInfo(
+                        $"[ui] summary of '{bound.Row.Label}': name ends at {(nameEnd - rowRect.rect.xMin) / rowWidth:0.###} of a {rowWidth:0}-unit row, " +
+                        $"summary {bound.SummaryRect.anchorMin.x - bound.SummaryRect.sizeDelta.x / rowWidth / 2f:0.###}.. size {bound.SummaryRect.sizeDelta}");
+                }
+            }
+            catch (Exception e)
+            {
+                BelmontUiPlugin.Logger.LogDebug($"[ui] '{bound.Row.Label}': summary not fitted: {e.Message}");
+            }
+        }
+    }
+
+    // Shows the rows of the current mode, retitles the page, rebuilds navigation and scroll.
+    private void ApplyMode()
+    {
+        foreach (var rowObject in _rowObjects)
+        {
+            if (rowObject == null)
+                continue;
+            _owner.TryGetValue(rowObject.Pointer, out var owner);
+            bool show = owner == _openPage;
+            if (rowObject.activeSelf != show)
+                rowObject.SetActive(show);
+        }
+        if (_titleText != null && _listTitle != null)
+        {
+            bool upper = _listTitle == _listTitle.ToUpperInvariant();
+            _titleText.text = _openPage == null ? _listTitle : upper ? _openPage.Title.ToUpperInvariant() : _openPage.Title;
+        }
+        var content = _content.TryCast<RectTransform>();
+        if (content != null)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(content);
+        UpdateNavigation();
+        if (_scrollReady)
+        {
+            SetScroll(0f);
+            _lastSelected = null;
+            ApplyClip();
+        }
+    }
+
+    private BoundRow FirstVisibleRow()
+    {
+        foreach (var bound in _rows)
+        {
+            if (bound.Object != null && bound.Object.activeSelf && bound.Selectable != null)
+                return bound;
+        }
+        return null;
+    }
+
+    private static void Select(BoundRow bound)
+    {
+        var eventSystem = EventSystem.current;
+        if (eventSystem != null && bound?.Selectable != null)
+            eventSystem.SetSelectedGameObject(bound.Selectable.gameObject);
+    }
+
+    private void OpenPage(SettingsMenu page)
+    {
+        if (_openPage != null || page == null)
+            return;
+        _openPage = page;
+        ApplyMode();
+        BlockBack();
+        Play(!_templates.OpenSfx.IsNull ? _templates.OpenSfx : _templates.SubTabSfx);
+        Select(FirstVisibleRow());
+        NormalizeRows(log: false);
+        BelmontUiPlugin.Logger.LogInfo($"[ui] '{page.Title}' opened ({page.Rows.Count} rows, selection {SelectionName()})");
+    }
+
+    // silent: the tab lost focus or the menu closed; no sound, no reselection, inputs back at once.
+    private void ClosePage(bool silent)
+    {
+        var page = _openPage;
+        if (page == null)
+            return;
+        try
+        {
+            page.Save();
+        }
+        catch (Exception e)
+        {
+            BelmontUiPlugin.Logger.LogError($"[ui] {page.Id}: save failed: {e}");
+        }
+        _openPage = null;
+        ApplyMode();
+        if (silent)
+        {
+            _waitBackRelease = false;
+            UnblockBack();
+            BelmontUiPlugin.Logger.LogInfo($"[ui] '{page.Title}' closed with the tab");
+            return;
+        }
+        Play(!_templates.CloseSfx.IsNull ? _templates.CloseSfx : _templates.SubTabSfx);
+        Select(_rows.FirstOrDefault(r => r.Opens == page && r.Object != null && r.Object.activeSelf) ?? FirstVisibleRow());
+        NormalizeRows(log: false);
+        // The game's own Close / Cancel come back once the key that closed the sub-menu is up,
+        // so the same press can't also close the pause menu.
+        _waitBackRelease = true;
+        BelmontUiPlugin.Logger.LogInfo($"[ui] '{page.Title}' closed (selection {SelectionName()})");
+    }
+
+    private static bool BackPressed()
+    {
+        var pad = Gamepad.current;
+        var keyboard = Keyboard.current;
+        return (pad != null && pad.buttonEast.wasPressedThisFrame) ||
+            (keyboard != null && (keyboard.escapeKey.wasPressedThisFrame || keyboard.backspaceKey.wasPressedThisFrame));
+    }
+
+    private static bool BackOrConfirmHeld()
+    {
+        var pad = Gamepad.current;
+        var keyboard = Keyboard.current;
+        return (pad != null && (pad.buttonEast.isPressed || pad.buttonSouth.isPressed)) ||
+            (keyboard != null && (keyboard.escapeKey.isPressed || keyboard.backspaceKey.isPressed || keyboard.enterKey.isPressed ||
+                                  keyboard.numpadEnterKey.isPressed || keyboard.spaceKey.isPressed)) ||
+            (Mouse.current != null && Mouse.current.leftButton.isPressed);
+    }
+
+    // While a sub-menu is open, the game's enabled Close / Cancel / Back actions are off, so B
+    // goes back to the list instead of closing the menu. Only actions that were on are touched.
+    private void BlockBack()
+    {
+        if (_blockedBack.Count > 0)
+            return;
+        foreach (var obj in Resources.FindObjectsOfTypeAll(Il2CppType.Of<InputActionAsset>()))
+        {
+            var asset = obj?.TryCast<InputActionAsset>();
+            if (asset == null)
+                continue;
+            foreach (var map in asset.actionMaps)
+            {
+                if (map == null || !map.enabled)
+                    continue;
+                foreach (var action in map.actions)
+                {
+                    if (action == null || !action.enabled || !BackWords.Any(w => action.name.IndexOf(w, StringComparison.OrdinalIgnoreCase) >= 0))
+                        continue;
+                    action.Disable();
+                    _blockedBack.Add(action);
+                }
+            }
+        }
+        if (!_blockLogged)
+        {
+            _blockLogged = true;
+            BelmontUiPlugin.Logger.LogInfo(
+                $"[ui] sub-menu: the game's back actions are off while it is open: [{string.Join(", ", _blockedBack.Select(a => $"{a.actionMap?.name}/{a.name}"))}]");
+        }
+    }
+
+    // Not while their map is off (menu closed): the game turns them on with the map.
+    private void UnblockBack()
+    {
+        foreach (var action in _blockedBack)
+        {
+            try
+            {
+                if (action.actionMap != null && action.actionMap.enabled)
+                    action.Enable();
+            }
+            catch (Exception e)
+            {
+                BelmontUiPlugin.Logger.LogDebug($"[ui] back action not restored: {e.Message}");
+            }
+        }
+        _blockedBack.Clear();
+    }
+
+    private void OnUnfocused()
+    {
+        SaveAll();
+        _pendingOpen = null;
+        _pendingClose = false;
+        if (_openPage != null)
+        {
+            ClosePage(silent: true);
+        }
+        else
+        {
+            _waitBackRelease = false;
+            UnblockBack();
+        }
+    }
+
     // ---- focus ----
 
     private void OnFocused()
@@ -1777,8 +2172,9 @@ internal sealed class ModsTab
             Rebuild();
         ForceVisible();
         RefreshValues();
-        // Navigation links are computed from live objects, so once more now that everything shows.
-        UpdateNavigation();
+        // The mode's rows only (the list, or the open sub-menu), with navigation computed from live
+        // objects now that everything shows.
+        ApplyMode();
         bool first = !_pageLogged;
         if (first)
         {
@@ -1977,7 +2373,9 @@ internal sealed class ModsTab
                     group.blocksRaycasts = true;
                     changed++;
                 }
-                if (!group.gameObject.activeSelf)
+                // Never under the rows: the list and the sub-menus hide rows by deactivating them,
+                // and row roots carry canvas groups (0.2.0 showed every sub-menu row on the list).
+                if (!group.gameObject.activeSelf && !IsUnder(group.transform, _content))
                 {
                     group.gameObject.SetActive(true);
                     changed++;
@@ -2292,10 +2690,11 @@ internal sealed class ModsTab
 
     // The copied page's own texts: the tab title becomes ours, the long note (the Gameplay tab's
     // balance warning) goes, and no localizer gets to put them back.
-    private static void FixPageTexts(GameObject tabObject, string sourceTitle)
+    private static TMP_Text FixPageTexts(GameObject tabObject, string sourceTitle)
     {
         string title = Caption(sourceTitle);
         int titles = 0, cleared = 0;
+        TMP_Text titleText = null;
         foreach (var text in tabObject.GetComponentsInChildren<TMP_Text>(true))
         {
             foreach (var localizer in text.GetComponents<LocalizeStringEvent>())
@@ -2308,6 +2707,7 @@ internal sealed class ModsTab
             if (sourceTitle.Length > 0 && string.Equals(value, sourceTitle.Trim(), StringComparison.OrdinalIgnoreCase))
             {
                 text.text = title;
+                titleText ??= text;
                 titles++;
             }
             else if (value.Length > LongTextLength)
@@ -2317,6 +2717,7 @@ internal sealed class ModsTab
             }
         }
         BelmontUiPlugin.Logger.LogDebug($"[ui] page texts: {titles} title(s) renamed, {cleared} note(s) cleared");
+        return titleText;
     }
 
     // Localizers would overwrite our texts and dropdown options.
@@ -2427,7 +2828,7 @@ internal sealed class ModsTab
         unityEvent.AddListener(DelegateSupport.ConvertDelegate<UnityAction<T>>(action));
     }
 
-    private static void Skip(SettingsPage page, SettingRow row, string why) =>
+    private static void Skip(SettingsMenu page, SettingRow row, string why) =>
         BelmontUiPlugin.Logger.LogWarning($"[ui] {page.Id}: '{row.Label}' not shown: {why}");
 
     private static ModsTab Fail(ITabHost host, string why)

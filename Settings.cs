@@ -6,21 +6,50 @@ using BepInEx.Configuration;
 
 namespace BelmontUi;
 
-// Entry point: declare a mod's settings once, in Load(), and they appear as a section of the
-// Mods Settings tab in the game's Settings menu (pause menu and title screen).
+/// <summary>
+/// Entry point of the library: declare a mod's settings once, in your plugin's <c>Load()</c>, and they
+/// appear on the <b>Mods Settings</b> tab (pause menu top bar; the title screen's Settings screen).
+/// </summary>
+/// <remarks>
+/// The tab lists every registered mod with its title, summary and a Settings button that opens the
+/// mod's rows as a sub-menu. Call these methods only from code that runs when BelmontUI is installed
+/// (check <c>IL2CPPChainloader.Instance.Plugins.ContainsKey("leandrobueno.belmontui")</c> first and keep
+/// every <c>BelmontUi.*</c> reference in a separate class), so your mod still loads without it.
+/// </remarks>
 public static class Settings
 {
-    private static readonly Dictionary<string, SettingsPage> ByGuid = new();
-    private static readonly List<SettingsPage> PageList = new();
+    private static readonly Dictionary<string, SettingsMenu> ByGuid = new();
+    private static readonly List<SettingsMenu> PageList = new();
 
     // Bumped on every change, so a tab built from an older state rebuilds itself.
     internal static int Revision;
 
-    public static SettingsPage Register(string guid, string title, Action<SettingsPage> build)
+    /// <summary>Registers a mod's settings menu and fills it with the builder methods.</summary>
+    /// <param name="guid">Your plugin's GUID. It identifies the menu: registering the same GUID again replaces the earlier menu.</param>
+    /// <param name="title">The mod's name, shown on its row of the list and at the top of its sub-menu. Null or empty uses <paramref name="guid"/>.</param>
+    /// <param name="build">
+    /// Adds the rows, in display order, through the builder methods of the menu it receives
+    /// (<see cref="SettingsMenu.Toggle"/>, <see cref="SettingsMenu.Slider"/>, ...). Runs once, right away.
+    /// Null registers an empty menu.
+    /// </param>
+    /// <param name="summary">One line describing the mod, shown in the middle of its row on the list (optional).</param>
+    /// <returns>The menu, for later changes (<see cref="SettingsMenu.Title"/>, <see cref="SettingsMenu.Summary"/>, more rows).</returns>
+    /// <exception cref="ArgumentException"><paramref name="guid"/> is empty, or a row added by <paramref name="build"/> is invalid (the message names the row).</exception>
+    /// <example>
+    /// <code>
+    /// BelmontUi.Settings.Register(Plugin.Guid, "My Mod", menu =>
+    /// {
+    ///     menu.Toggle(Plugin.Enabled, "Enabled");
+    ///     menu.Slider(Plugin.Opacity, "Opacity", 0.2f, 1f, 0.05f, "{0:0%}");
+    ///     menu.ResetButton();
+    /// }, summary: "What my mod does, in one line.");
+    /// </code>
+    /// </example>
+    public static SettingsMenu Register(string guid, string title, Action<SettingsMenu> build, string summary = null)
     {
         if (string.IsNullOrEmpty(guid))
-            throw new ArgumentException("A page needs the mod's GUID", nameof(guid));
-        var page = new SettingsPage(guid, title);
+            throw new ArgumentException("A menu needs the mod's GUID", nameof(guid));
+        var page = new SettingsMenu(guid, title, summary);
         build?.Invoke(page);
 
         if (ByGuid.TryGetValue(guid, out var old))
@@ -33,12 +62,23 @@ public static class Settings
         return page;
     }
 
-    // Rows from the config file's own metadata: bool entries become toggles, numbers with an
-    // AcceptableValueRange sliders, strings with an AcceptableValueList and enums choices.
-    // Labels come from the keys ("HudOpacity" -> "Hud opacity"), hints from the descriptions.
-    // Entries that don't fit (free text, numbers without a range) are left out. extra can add
-    // rows; a Restore defaults button is added unless extra added a button.
-    public static SettingsPage RegisterFromConfig(string guid, string title, ConfigFile config, Action<SettingsPage> extra = null)
+    /// <summary>
+    /// Registers a mod's settings menu built from its config file's own metadata, with no row code.
+    /// </summary>
+    /// <param name="guid">Your plugin's GUID; registering the same GUID again replaces the earlier menu.</param>
+    /// <param name="title">The mod's name, shown on the list and at the top of its sub-menu.</param>
+    /// <param name="config">Your plugin's <c>Config</c>. Every entry already bound becomes a row, in the file's order:
+    /// <c>bool</c> a toggle; a number with an <c>AcceptableValueRange</c> a slider; a string with an
+    /// <c>AcceptableValueList</c>, or an enum, a list row. Free text and numbers without a range are left
+    /// out (logged at debug level). Labels come from the keys (<c>HudOpacity</c> becomes "Hud opacity"),
+    /// hints from the descriptions.</param>
+    /// <param name="extra">Optional: adds more rows after the generated ones, with the builder methods.</param>
+    /// <param name="summary">One line describing the mod, shown on its row of the list (optional).</param>
+    /// <returns>The menu.</returns>
+    /// <remarks>A "Restore defaults" row is added at the end unless <paramref name="extra"/> added a button row of its own.</remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="config"/> is null.</exception>
+    public static SettingsMenu RegisterFromConfig(string guid, string title, ConfigFile config, Action<SettingsMenu> extra = null,
+        string summary = null)
     {
         if (config == null)
             throw new ArgumentNullException(nameof(config));
@@ -49,12 +89,17 @@ public static class Settings
             extra?.Invoke(page);
             if (!page.Rows.Any(r => !r.IsSetting))
                 page.ResetButton();
-        });
+        }, summary);
     }
 
-    public static SettingsPage Get(string guid) =>
+    /// <summary>The menu registered under a plugin GUID.</summary>
+    /// <param name="guid">The plugin GUID passed to <see cref="Register"/> or <see cref="RegisterFromConfig"/>.</param>
+    /// <returns>The menu, or null when nothing is registered under that GUID.</returns>
+    public static SettingsMenu Get(string guid) =>
         guid != null && ByGuid.TryGetValue(guid, out var page) ? page : null;
 
+    /// <summary>Removes a mod's menu from the tab; nothing happens when the GUID isn't registered.</summary>
+    /// <param name="guid">The plugin GUID the menu was registered under.</param>
     public static void Unregister(string guid)
     {
         if (guid == null || !ByGuid.Remove(guid, out var page))
@@ -63,9 +108,11 @@ public static class Settings
         Revision++;
     }
 
-    internal static SettingsPage[] Snapshot() => PageList.ToArray();
+    // By title, case-insensitive, as the list shows them.
+    internal static SettingsMenu[] Snapshot() =>
+        PageList.OrderBy(p => p.Title, StringComparer.OrdinalIgnoreCase).ToArray();
 
-    private static void AddFromConfig(SettingsPage page, ConfigEntryBase entry)
+    private static void AddFromConfig(SettingsMenu page, ConfigEntryBase entry)
     {
         string label = Humanize(entry.Definition.Key);
         string hint = entry.Description?.Description;
@@ -113,7 +160,7 @@ public static class Settings
         }
     }
 
-    private static void Skip(SettingsPage page, ConfigEntryBase entry, string why) =>
+    private static void Skip(SettingsMenu page, ConfigEntryBase entry, string why) =>
         BelmontUiPlugin.Logger.LogDebug($"[ui] {page.Id}: {entry.Definition.Section}.{entry.Definition.Key} not on the page ({why})");
 
     private static bool TryRange(AcceptableValueBase acceptable, out float min, out float max)

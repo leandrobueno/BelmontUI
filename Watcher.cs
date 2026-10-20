@@ -19,6 +19,7 @@ namespace BelmontUi;
 // its sixth, which it does once the menu has been opened and closed). So with that mod installed,
 // the bar is left alone until its MODS tab is there, or until a timeout with the menu closed, in
 // case that mod never adds it.
+/// <summary>The library's Unity component, which finds the game's menus and adds the Mods Settings tab. Not for direct use.</summary>
 public class BelmontUiWatcher : MonoBehaviour
 {
     private const int PollFrames = 30;
@@ -26,7 +27,8 @@ public class BelmontUiWatcher : MonoBehaviour
     private const string MinimapTabName = "TabContent_MODS";
     private const float MinimapWaitSeconds = 20f;
 
-    // Needed by IL2CPP for a class injected with AddComponent.
+    /// <summary>Required by Il2CppInterop for a component injected with <c>AddComponent</c>; not for direct use.</summary>
+    /// <param name="pointer">The native object pointer.</param>
     public BelmontUiWatcher(IntPtr pointer) : base(pointer) { }
 
     // Decided on the first poll, not at load: this plugin loads before Belmont Minimap.

@@ -32,6 +32,7 @@ internal sealed class ModsTab
     // The object name stays "ModsSettingsTab": Belmont Minimap's tab is "TabContent_MODS", and the
     // watcher tells the two MODS tabs apart by name.
     private const string TabName = "ModsSettingsTab";
+    private const string ContentHolderName = "BelmontUiContent";
     private const float FallbackRowHeight = 60f;
     private const int LongTextLength = 40;
     private const float ToggleDumpDelay = 1f;
@@ -978,19 +979,45 @@ internal sealed class ModsTab
                 kept.Add(component.GetIl2CppType().Name);
         }
 
+        // The content was laid out inside the Settings page root, which is inset from its parent
+        // (300 units each side at 4K); the shell fills the pause menu's page area. The content goes
+        // into a holder with the page root's horizontal geometry, so the rows are as wide and as
+        // centred as the game's settings rows. Vertically the holder fills the shell: the pause
+        // menu's own top padding and row band are applied to it later.
+        var holder = new GameObject(ContentHolderName);
+        holder.layer = shell.layer;
+        var holderRect = holder.AddComponent<RectTransform>();
+        holder.transform.SetParent(shell.transform, false);
+        var source = settingsCopy.transform.TryCast<RectTransform>();
+        if (source != null)
+        {
+            holderRect.anchorMin = new Vector2(source.anchorMin.x, 0f);
+            holderRect.anchorMax = new Vector2(source.anchorMax.x, 1f);
+            holderRect.pivot = new Vector2(source.pivot.x, 0.5f);
+            holderRect.sizeDelta = new Vector2(source.sizeDelta.x, 0f);
+            holderRect.anchoredPosition = new Vector2(source.anchoredPosition.x, 0f);
+        }
+        else
+        {
+            holderRect.anchorMin = Vector2.zero;
+            holderRect.anchorMax = Vector2.one;
+            holderRect.sizeDelta = Vector2.zero;
+        }
+
         var children = new List<Transform>();
         for (int i = 0; i < settingsCopy.transform.childCount; i++)
             children.Add(settingsCopy.transform.GetChild(i));
         foreach (var child in children)
         {
-            child.SetParent(shell.transform, false);
+            child.SetParent(holder.transform, false);
             child.SetAsLastSibling();
         }
         Object.DestroyImmediate(settingsCopy);
 
         BelmontUiPlugin.Logger.LogInfo(
             $"[ui] page shell from '{nativePage.name}': kept [{string.Join(", ", kept)}], removed [{string.Join(", ", removed)}], " +
-            $"{children.Count} content object(s) moved in");
+            $"{children.Count} content object(s) moved in, horizontal inset {holderRect.sizeDelta.x:0} " +
+            $"(anchors x {holderRect.anchorMin.x:0.##}-{holderRect.anchorMax.x:0.##})");
         return shell;
     }
 
@@ -2438,10 +2465,12 @@ internal sealed class ModsTab
             if (page == null || page.rect.height <= 1f)
                 return;
             float pad = page.rect.height * TopPadding;
+            // The content sits in the shell's holder (see BuildShell), or right under the page.
+            var holder = page.Find(ContentHolderName) ?? page;
             var moved = new List<string>();
-            for (int i = 0; i < page.childCount; i++)
+            for (int i = 0; i < holder.childCount; i++)
             {
-                var child = page.GetChild(i).TryCast<RectTransform>();
+                var child = holder.GetChild(i).TryCast<RectTransform>();
                 if (child == null)
                     continue;
                 if (!Mathf.Approximately(child.anchorMin.y, child.anchorMax.y))

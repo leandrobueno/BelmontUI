@@ -20,6 +20,7 @@ Every version from 0.1.0 to 0.2.2 was built on 2026-10-19, 0.3.0 on 2026-10-21; 
 - The tab follows the game's language, including a change while the game runs (the texts of the rows already built are rewritten).
 - `LocalizedText`: a text with one version per language. Overloads taking it on `Register`, `RegisterFromConfig` and every builder method, plus `SettingsMenu.LocalizedTitle` / `LocalizedSummary`, `Settings.Language` and `Settings.LanguageChanged`.
 - Backward compatible: the string methods are unchanged, so mods built against 0.2 load and behave as before; their default reset row is translated as well.
+- Fixed: on the pause menu the rows sat at the left edge of the page instead of centred like the game's settings rows (in every version since 0.1.2). The copied settings content now keeps the Settings page's side margins inside the pause-menu page.
 - Fixed: a slider's value showed its minimum in the slider's own format ("0.2" for 100%) until it was first moved. The copied slider writes its label when it first runs, after BelmontUI did; BelmontUI now writes it again for the first frames a slider row is shown.
 
 ## 0.2.2

@@ -22,13 +22,13 @@ Every lookup is by component type, never by object name.
 
 ## Tab placement: always last
 
-The MODS SETTINGS tab is appended to the bar, never inserted in front of another mod's tab. On every poll BelmontUI checks three things and fixes only its own tab:
+BelmontUI's MODS tab is appended to the bar, never inserted in front of another mod's tab. On every poll BelmontUI checks three things and fixes only its own tab:
 
 - it is the last entry of the bar's tab array;
 - its toggle is the last sibling in the toggle row;
 - its toggle is the last one in the toggle group.
 
-If another mod added a tab after it, BelmontUI moves its own tab back to the end and logs `[ui] tab moved to the end of '<bar>' (after '<tab>')` at debug level. If another mod rewrote the tab array without it, it is put back: `[ui] Mods Settings tab put back into '<bar>' (another mod rewrote its tabs)`.
+If another mod added a tab after it, BelmontUI moves its own tab back to the end and logs `[ui] tab moved to the end of '<bar>' (after '<tab>')` at debug level. If another mod rewrote the tab array without it, it is put back: `[ui] MODS tab put back into '<bar>' (another mod rewrote its tabs)`.
 
 The other toggles on the bar are narrowed by n/(n+1) so one more fits.
 
@@ -40,7 +40,7 @@ Whether Minimap is installed is decided on the first poll, not at load: BelmontU
 
 ## Cloning the native widgets
 
-1. **The page** is a copy of the Settings screen's GAMEPLAY tab, or any settings tab when that is missing. Its scroll area and navigation group stay; its rows and settings logic go. The title becomes "MODS SETTINGS" and the long note is cleared. On the pause menu, the content moves into a shell copied from the last native pause-menu page, so it shows and hides like its neighbours.
+1. **The page** is a copy of the Settings screen's GAMEPLAY tab, or any settings tab when that is missing. Its scroll area and navigation group stay; its rows and settings logic go. The title becomes "MODS" and the long note is cleared. On the pause menu, the content moves into a shell copied from the last native pause-menu page, so it shows and hides like its neighbours.
 2. **The top-bar toggle** is a copy of the bar's last visible toggle, relabelled. On every poll it is matched to a native toggle (sizes, layout, text settings, images) while both are off, so it stays identical.
 3. **The rows** are copies of native rows: the checkbox row for toggles, the slider row for sliders, the list row for choices and keys. The game's binding component is stripped and the Doozy control is driven against your `ConfigEntry`. Localizers are stripped so your texts stay. Controller navigation uses the same selectable the native page uses for that kind of row.
 4. **Buttons** are a copy of the System page's framed button, placed where other rows have their control. Before the pause menu has been opened once there is nothing to copy, so on the title screen a button row shows a checkbox that works the same.
@@ -49,7 +49,7 @@ Whether Minimap is installed is decided on the first poll, not at load: BelmontU
 
 ## The mod list and sub-menus
 
-On every rebuild, BelmontUI builds all rows at once: one list row per registered mod, sorted by title (case-insensitive), then each mod's rows followed by a **Back** row. The list and the sub-menus only switch which rows are active, so moving between them doesn't rebuild anything. The log gets `[ui] Mods Settings: <n> mod(s) [<titles>], <m> rows in all`. With no mod registered, the page shows one line: "No mod has registered settings."
+On every rebuild, BelmontUI builds all rows at once: one list row per registered mod, sorted by title (case-insensitive), then each mod's rows followed by a **Back** row. The list and the sub-menus only switch which rows are active, so moving between them doesn't rebuild anything. The log gets `[ui] MODS tab: <n> mod(s) [<titles>], <m> rows in all`. With no mod registered, the page shows one line: "No mod has registered settings."
 
 - **The summary** starts just after the mod's name and runs up to the button. Its position is fixed the first frame the list row is drawn, because a name measured before it is shown comes out too wide.
 - **Opening.** Pressing a list row's **Settings** button opens the sub-menu on the next frame. The page title becomes the mod's title and the first row is selected. The Settings screen's open sound plays, and the log gets `[ui] '<title>' opened (...)`.
@@ -71,7 +71,7 @@ The tab depends on the game's menu components: the Settings tab view and its row
 
 BelmontUI fails safe:
 
-- Every step is guarded. A failure logs `[ui] Mods Settings tab not added to '<bar>': <reason>` and leaves the game's menu as it was. You lose the tab, not the menu.
+- Every step is guarded. A failure logs `[ui] MODS tab not added to '<bar>': <reason>` and leaves the game's menu as it was. You lose the tab, not the menu.
 - A single row that fails logs `[ui] <guid>: row '<label>' not added: ...` and the other rows still show.
 - Mods keep working either way; their settings stay editable in their `.cfg` files.
 - Because the public API uses only plain .NET types, a rebuilt BelmontUI after a game update does not force consumer mods to rebuild.

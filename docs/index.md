@@ -6,7 +6,7 @@ nav_order: 1
 
 # BelmontUI
 
-BelmontUI is a library for **Castlevania: Belmont's Curse** mods running on BepInEx 6 (IL2CPP). It adds a **MODS SETTINGS** tab to the game's pause menu, and to the Settings screen on the title screen. Each mod that registers settings gets a row on that tab with its title, a one-line summary and a **Settings** button. The button opens the mod's own sub-menu, built from the game's own toggles, sliders, list steppers and buttons.
+BelmontUI is a library for **Castlevania: Belmont's Curse** mods running on BepInEx 6 (IL2CPP). It adds a **MODS** tab to the game's pause menu, and to the Settings screen on the title screen. Each mod that registers settings gets a row on that tab with its title, a one-line summary and a **Settings** button. The button opens the mod's own sub-menu, built from the game's own toggles, sliders, list steppers and buttons.
 
 A mod declares its settings once, in `Load()`, with a few lines of C#:
 

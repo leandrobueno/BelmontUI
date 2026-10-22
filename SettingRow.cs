@@ -23,12 +23,14 @@ internal enum ButtonSound
 }
 
 // One line of a mod's settings menu, as the builder methods of SettingsMenu declare it. The
-// Mods Settings tab reads it when it builds (and rebuilds after a menu changes), and writes the
+// MODS tab reads it when it builds (and rebuilds after a menu changes), and writes the
 // chosen value straight to BindsTo. Internal: mods use the builder methods.
 internal sealed class SettingRow
 {
-    public string Label { get; set; }
-    public string Hint { get; set; }
+    // The texts in every language the mod gave; Label, Hint, Labels and ButtonText are them in
+    // the game's current language, read when the tab builds and again on a language change.
+    public LocalizedText LabelText { get; set; }
+    public LocalizedText HintText { get; set; }
     public RowKind Kind { get; set; }
 
     // The BepInEx config entry the row changes. Not used by Button rows.
@@ -44,28 +46,32 @@ internal sealed class SettingRow
     // Choice: what the entry holds (a string, or an enum member's name), and what the player sees
     // for each (the values themselves when not given).
     public string[] Values { get; set; }
-    public string[] Labels { get; set; }
+    public LocalizedText[] LabelTexts { get; set; }
 
     // Key: Input System Key names ("F3", "Digit1", "Q"; also Mouse4 and Mouse5).
     public string[] Keys { get; set; }
 
     // Button: what pressing it does, and the caption on the button (the label when not given).
     public Action OnPress { get; set; }
-    public string ButtonText { get; set; }
+    public LocalizedText ButtonLabel { get; set; }
 
     internal ButtonSound Sound = ButtonSound.Apply;
 
     public SettingRow() { }
 
-    public SettingRow(string label, RowKind kind, ConfigEntryBase bindsTo = null)
+    public SettingRow(LocalizedText label, RowKind kind, ConfigEntryBase bindsTo = null)
     {
-        Label = label;
+        LabelText = label;
         Kind = kind;
         BindsTo = bindsTo;
     }
 
     // ---- for the tab ----
 
+    internal string Label => LocalizedText.Show(LabelText);
+    internal string Hint => LocalizedText.Show(HintText);
+    internal string[] Labels => LabelTexts?.Select(t => LocalizedText.Show(t) ?? "").ToArray();
+    internal string ButtonText => LocalizedText.Show(ButtonLabel);
     internal ConfigEntryBase Entry => BindsTo;
     internal bool IsSetting => Kind != RowKind.Button;
     internal string[] OptionValues => Kind == RowKind.Key ? Keys : Values;
@@ -78,7 +84,7 @@ internal sealed class SettingRow
     // in the tab is refused when it is declared, with what is missing.
     internal void Validate()
     {
-        if (string.IsNullOrEmpty(Label))
+        if (LabelText == null || LabelText.IsEmpty)
             throw new ArgumentException("A row needs a Label");
         string name = $"Row '{Label}' ({Kind})";
         if (Kind == RowKind.Button)
@@ -111,8 +117,8 @@ internal sealed class SettingRow
             case RowKind.Choice:
                 if (Values == null || Values.Length == 0)
                     throw new ArgumentException($"{name} needs Values, at least one");
-                if (Labels != null && Labels.Length != Values.Length)
-                    throw new ArgumentException($"{name} needs one Label per Value ({Labels.Length} labels, {Values.Length} values)");
+                if (LabelTexts != null && LabelTexts.Length != Values.Length)
+                    throw new ArgumentException($"{name} needs one Label per Value ({LabelTexts.Length} labels, {Values.Length} values)");
                 if (type.IsEnum)
                 {
                     var missing = Values.Where(v => !Enum.IsDefined(type, v)).ToArray();

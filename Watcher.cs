@@ -8,8 +8,8 @@ using UnityEngine;
 
 namespace BelmontUi;
 
-// The game rebuilds its menus per scene, so every half second this looks for a place for the Mods
-// Settings tab: the pause menu's tab bar when the scene has one (in game), else the Settings
+// The game rebuilds its menus per scene, so every half second this looks for a place for the MODS
+// tab: the pause menu's tab bar when the scene has one (in game), else the Settings
 // screen's (title screen). A menu where adding failed is left alone until the next scene, so a
 // game update that moves things around costs the tab, not the menu. Tabs already added are
 // checked every poll, because Belmont Minimap rewrites the pause menu's tab array.
@@ -19,7 +19,7 @@ namespace BelmontUi;
 // its sixth, which it does once the menu has been opened and closed). So with that mod installed,
 // the bar is left alone until its MODS tab is there, or until a timeout with the menu closed, in
 // case that mod never adds it.
-/// <summary>The library's Unity component, which finds the game's menus and adds the Mods Settings tab. Not for direct use.</summary>
+/// <summary>The library's Unity component, which finds the game's menus and adds the MODS tab. Not for direct use.</summary>
 public class BelmontUiWatcher : MonoBehaviour
 {
     private const int PollFrames = 30;
@@ -48,6 +48,8 @@ public class BelmontUiWatcher : MonoBehaviour
 
             if (Time.frameCount % PollFrames != 0)
                 return;
+
+            GameLanguage.Poll();
 
             if (_minimapPresent == null)
             {
@@ -134,14 +136,14 @@ public class BelmontUiWatcher : MonoBehaviour
                 count++;
                 if (tab.gameObject.name == MinimapTabName)
                 {
-                    BelmontUiPlugin.Logger.LogInfo("[ui] Belmont Minimap's MODS tab is there; adding Mods Settings after it");
+                    BelmontUiPlugin.Logger.LogInfo("[ui] Belmont Minimap's MODS tab is there; adding BelmontUI's MODS tab after it");
                     return false;
                 }
             }
         }
 
         if (_waitLogged.Add(id))
-            BelmontUiPlugin.Logger.LogInfo("[ui] Belmont Minimap is installed: waiting for its MODS tab before adding Mods Settings");
+            BelmontUiPlugin.Logger.LogInfo("[ui] Belmont Minimap is installed: waiting for its MODS tab before adding BelmontUI's MODS tab");
 
         bool initialised = bar._initialized;
         bool showing = menu.IsShowing();
@@ -159,7 +161,7 @@ public class BelmontUiWatcher : MonoBehaviour
             return true;
         }
         BelmontUiPlugin.Logger.LogWarning(
-            $"[ui] Belmont Minimap didn't add its MODS tab within {MinimapWaitSeconds:0}s; adding Mods Settings now (that mod may then skip its tab)");
+            $"[ui] Belmont Minimap didn't add its MODS tab within {MinimapWaitSeconds:0}s; adding BelmontUI's MODS tab now (that mod may then skip its tab)");
         return false;
     }
 
@@ -179,7 +181,7 @@ public class BelmontUiWatcher : MonoBehaviour
         }
         if (source == null)
         {
-            BelmontUiPlugin.Logger.LogWarning("[ui] Mods Settings tab not added: no Settings screen in this scene to copy rows from");
+            BelmontUiPlugin.Logger.LogWarning("[ui] MODS tab not added: no Settings screen in this scene to copy rows from");
             _failed.Add(id);
             return;
         }

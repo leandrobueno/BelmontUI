@@ -5,12 +5,22 @@ nav_order: 7
 
 # Changelog
 
-Every version from 0.1.0 to 0.2.2 was built on 2026-10-19; each later one followed an in-game test of the one before. 0.1.9 was the first state the author confirmed has no visual issues. 0.2.2 is the current version, tested in game with the mod list, sub-menus and Back working.
+Every version from 0.1.0 to 0.2.2 was built on 2026-10-19, 0.3.0 on 2026-10-21; each later one followed an in-game test of the one before. 0.1.9 was the first state the author confirmed has no visual issues. 0.2.2 was tested in game with the mod list, sub-menus and Back working. 0.3.0 is the current version, tested in game in English, French, Japanese and Russian, with live language changes, on the pause menu and the title screen.
 
 | Version | Git commit |
 |---|---|
+| 0.3.0 | not committed yet |
 | 0.2.2 | `0d1b056` (includes 0.2.0 and 0.2.1) |
 | 0.1.9 | `b917e54` (includes 0.1.0 to 0.1.8) |
+
+## 0.3.0
+
+- The tab is called **MODS** on the pause menu and on the title screen's Settings, the same in every language (a player's suggestion). It is still always the last tab, and still comes after Belmont Minimap's own MODS tab.
+- BelmontUI's own texts are translated into the game's eleven languages: Settings, Back, the reset row (name, button, hint), the empty-list line and On / Off. Settings, Back and the reset row's name and button are the game's own words, taken from its string tables.
+- The tab follows the game's language, including a change while the game runs (the texts of the rows already built are rewritten).
+- `LocalizedText`: a text with one version per language. Overloads taking it on `Register`, `RegisterFromConfig` and every builder method, plus `SettingsMenu.LocalizedTitle` / `LocalizedSummary`, `Settings.Language` and `Settings.LanguageChanged`.
+- Backward compatible: the string methods are unchanged, so mods built against 0.2 load and behave as before; their default reset row is translated as well.
+- Fixed: a slider's value showed its minimum in the slider's own format ("0.2" for 100%) until it was first moved. The copied slider writes its label when it first runs, after BelmontUI did; BelmontUI now writes it again for the first frames a slider row is shown.
 
 ## 0.2.2
 

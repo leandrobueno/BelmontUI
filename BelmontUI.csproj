@@ -3,7 +3,7 @@
 		<TargetFramework>net6.0</TargetFramework>
 		<LangVersion>latest</LangVersion>
 		<CheckEolTargetFramework>false</CheckEolTargetFramework>
-		<Version>0.2.2</Version>
+		<Version>0.3.0</Version>
 		<!-- XML docs for IntelliSense: copied next to the dll, so mods referencing it get them. -->
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<Authors>leandrobueno</Authors>
@@ -22,10 +22,12 @@
 		<Reference Include="$(GameDir)\BepInEx\interop\Unity.TextMeshPro.dll" Private="false" />
 		<Reference Include="$(GameDir)\BepInEx\interop\Unity.InputSystem.dll" Private="false" />
 		<Reference Include="$(GameDir)\BepInEx\interop\Unity.Localization.dll" Private="false" />
+		<Reference Include="$(GameDir)\BepInEx\interop\Unity.ResourceManager.dll" Private="false" />
 		<Reference Include="$(GameDir)\BepInEx\interop\FMODUnity.dll" Private="false" />
 		<Reference Include="$(GameDir)\BepInEx\interop\Assembly-CSharp.dll" Private="false" />
 	</ItemGroup>
-	<Target Name="CopyToPlugins" AfterTargets="Build">
+	<!-- dotnet build -p:CopyToGame=false builds without touching the game (for example while it runs). -->
+	<Target Name="CopyToPlugins" AfterTargets="Build" Condition="'$(CopyToGame)' != 'false'">
 		<Copy SourceFiles="$(TargetPath);$(TargetDir)$(TargetName).xml" DestinationFolder="$(GameDir)\BepInEx\plugins\BelmontUI" />
 	</Target>
 

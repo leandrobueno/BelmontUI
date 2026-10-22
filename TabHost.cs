@@ -6,7 +6,7 @@ using UnityEngine.Events;
 
 namespace BelmontUi;
 
-// The tab bar the Mods Settings tab lives in: the pause menu's (MAP, EQUIPMENT, TAROT, JOURNEY,
+// The tab bar the MODS tab lives in: the pause menu's (MAP, EQUIPMENT, TAROT, JOURNEY,
 // SYSTEM; BasicTab tabs) when there is one, else the Settings screen's (CONTROLS ... LANGUAGE;
 // SettingTab tabs) on the title screen. Both are the game's UITabView<T>; this hides the T.
 internal interface ITabHost

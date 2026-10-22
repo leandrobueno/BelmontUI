@@ -17,14 +17,14 @@ Open `BepInEx\LogOutput.log` in the game folder after starting the game. Lines f
 |---|---|
 | `Belmont UI loaded` | The library itself loaded. |
 | `[ui] <guid>: settings page '<title>' registered (<n> settings)` | A mod registered its menu. |
-| `[ui] Mods Settings tab added to '<bar>' (page from '<source>' ...)` | The tab exists in that menu. |
-| `[ui] Mods Settings: <n> mod(s) [<titles>], <m> rows in all` | The mod list was built with these mods. |
+| `[ui] MODS tab added to '<bar>' (page from '<source>' ...)` | The tab exists in that menu. |
+| `[ui] MODS tab: <n> mod(s) [<titles>], <m> rows in all` | The mod list was built with these mods. |
 | `[ui] '<title>' opened (...)` / `[ui] '<title>' closed (...)` | A mod's sub-menu was opened or closed. |
 | `[ui] sub-menu: the game's back actions are off while it is open: [...]` | The input actions suspended so B returns to the list. Logged once. |
-| `[ui] Belmont Minimap is installed: waiting for its MODS tab before adding Mods Settings` | Minimap is there; BelmontUI waits for it. |
-| `[ui] Belmont Minimap's MODS tab is there; adding Mods Settings after it` | The wait ended normally. |
-| `[ui] Mods Settings tab not added to '<bar>': <why>` | Building the tab failed; the game's menu is untouched. |
-| `[ui] Mods Settings tab not added: no Settings screen in this scene to copy rows from` | This scene has no Settings screen to copy rows from yet. |
+| `[ui] Belmont Minimap is installed: waiting for its MODS tab before adding BelmontUI's MODS tab` | Minimap is there; BelmontUI waits for it. |
+| `[ui] Belmont Minimap's MODS tab is there; adding BelmontUI's MODS tab after it` | The wait ended normally. |
+| `[ui] MODS tab not added to '<bar>': <why>` | Building the tab failed; the game's menu is untouched. |
+| `[ui] MODS tab not added: no Settings screen in this scene to copy rows from` | This scene has no Settings screen to copy rows from yet. |
 | `[ui] <guid>: row '<label>' not added: ...` | One row failed; the others still show. |
 | `[ui] <guid>: '<label>' failed: ...` | A button's action threw. |
 | `[ui] <guid>: save failed: ...` | Writing a config file failed. |
@@ -32,7 +32,7 @@ Open `BepInEx\LogOutput.log` in the game folder after starting the game. Lines f
 
 For more detail, set `LogLevels = All` in `BepInEx\config\BepInEx.cfg` (section `[Logging.Disk]`) to see the debug lines too, such as skipped config entries and tab moves.
 
-## "There is no MODS SETTINGS tab"
+## "There is no MODS tab"
 
 1. Is `BelmontUI.dll` in `BepInEx\plugins\BelmontUI\`? Does the log have `Belmont UI loaded`?
 2. Is BepInEx 6 IL2CPP installed and working? Other mods loading is a good sign.
@@ -63,7 +63,7 @@ Look for the `back actions are off` line. If it is missing or the list is empty,
 
 | With | Status |
 |---|---|
-| Belmont Minimap | Supported. Its MODS tab comes first; MODS SETTINGS follows it. |
-| Other mods that add tabs | Supported. MODS SETTINGS moves itself to the end and never reorders other tabs. |
+| Belmont Minimap | Supported. Its MODS tab comes first; BelmontUI's MODS tab follows it. |
+| Other mods that add tabs | Supported. BelmontUI's MODS tab moves itself to the end and never reorders other tabs. |
 | Mods without BelmontUI support | Unaffected. |
 | Game updates | May stop the tab from appearing until BelmontUI is updated. The game's menus keep working. |

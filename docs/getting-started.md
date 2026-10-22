@@ -13,7 +13,7 @@ nav_order: 2
 
 1. Install [BepInEx 6 for IL2CPP](https://builds.bepinex.dev/projects/bepinex_be) (build be.788 or later) into the game folder and start the game once.
 2. Put `BelmontUI.dll` in `BepInEx\plugins\BelmontUI\`.
-3. Start the game and open the pause menu. A **MODS SETTINGS** tab is the last tab of the top bar. On the title screen, open **Settings** and the tab is there too.
+3. Start the game and open the pause menu. A **MODS** tab is the last tab of the top bar. On the title screen, open **Settings** and the tab is there too.
 
 On its own the tab says that no mod has registered settings. It fills up as you install mods that use it.
 
@@ -90,7 +90,7 @@ internal static class MenuGlue
         if (!Available)
         {
             Plugin.Logger.LogWarning(
-                $"Belmont UI ({LibGuid}) isn't installed: no Mods Settings tab in the Settings menu, edit the config file instead");
+                $"Belmont UI ({LibGuid}) isn't installed: no MODS tab in the Settings menu, edit the config file instead");
             return;
         }
         try
@@ -102,7 +102,7 @@ internal static class MenuGlue
             // Not the presence check: the library is known to be loaded here. This catches a
             // row that fails validation, so a bad row can't stop the mod from loading.
             Available = false;
-            Plugin.Logger.LogError($"[settings] Belmont UI registration failed, the Mods Settings section is off: {e}");
+            Plugin.Logger.LogError($"[settings] Belmont UI registration failed, the MODS tab is off: {e}");
         }
     }
 
@@ -149,7 +149,7 @@ Why each piece is there:
 
 ## Check it worked
 
-Open the pause menu, go to **MODS SETTINGS**, find your mod's row and press **Settings**. `BepInEx\LogOutput.log` should contain:
+Open the pause menu, go to **MODS**, find your mod's row and press **Settings**. `BepInEx\LogOutput.log` should contain:
 
 ```text
 [Info   :Belmont UI] [ui] author.mymod: settings page 'My Mod' registered (3 settings)

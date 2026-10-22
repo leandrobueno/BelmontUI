@@ -1,6 +1,6 @@
 # BelmontUI for AI coding agents
 
-BelmontUI is a BepInEx 6 (IL2CPP) library for Castlevania: Belmont's Curse. It adds a **Mods Settings** tab to the game's pause menu and to the title screen's Settings screen. A mod declares its settings once, in `Load()`, and the player gets them in the game's own widgets. This file lets you add that support to a mod without reading BelmontUI's source. Facts are taken from `Settings.cs`, `SettingsMenu.cs`, `SettingRow.cs` and `Plugin.cs` at version 0.2.2. The dll ships `BelmontUI.xml`, so IDE tooltips carry the same descriptions.
+BelmontUI is a BepInEx 6 (IL2CPP) library for Castlevania: Belmont's Curse. It adds a **MODS** tab to the game's pause menu and to the title screen's Settings screen. A mod declares its settings once, in `Load()`, and the player gets them in the game's own widgets. This file lets you add that support to a mod without reading BelmontUI's source. Facts are taken from `Settings.cs`, `SettingsMenu.cs`, `SettingRow.cs` and `Plugin.cs` at version 0.3.0. The dll ships `BelmontUI.xml`, so IDE tooltips carry the same descriptions.
 
 ## Facts
 
@@ -130,20 +130,20 @@ AbilityWheel wraps `Lib.Register()` in `try/catch` inside the glue class to log 
 - Do not pass interop (`Il2Cpp*`, Unity) types to the API. It takes `ConfigEntryBase`, strings, numbers and `Action` only.
 - Do not use a hard `[BepInDependency]` without `SoftDependency`. The mod would refuse to load without the library.
 - Do not copy `BelmontUI.dll` into your mod's plugin folder.
-- Labels, hints and captions are shown as given; pass your own translations if you want them.
+- Texts: a plain `string` shows the same in every language. For per-language texts pass a `BelmontUi.LocalizedText` (`new LocalizedText("Enabled") { ["fr"] = "Activé", ["ja"] = "有効" }`); every builder method, `Register` and `RegisterFromConfig` has an overload for it, and `SettingsMenu.LocalizedTitle` / `LocalizedSummary` exist. Locale codes: `en fr de es it pt-BR ru ja ko zh-CN zh-TW`; fallback is exact, code without region, `en`, plain text. `Settings.Language` / `Settings.LanguageChanged` give the game's language. The game's fonts are small fixed atlases: check rare characters (non-Latin fonts lack lower-case `j`). Keep `LocalizedText` inside the isolated class like every other `BelmontUi.*` type.
 
 ## Verify in game
 
 1. Put BelmontUI and the mod in `BepInEx\plugins` and start the game.
-2. Pause menu top bar: a **MODS SETTINGS** tab after SYSTEM, and after Belmont Minimap's MODS when that mod is installed. The title screen's Settings has the same tab. It opens on a list of registered mods sorted by title, one row each with the title, the `summary` and a **Settings** button. The button opens the mod's rows as a sub-menu titled with the mod's title. B, Esc, Backspace or the **Back** row return to the list; while the sub-menu is open, B does not close the pause menu.
+2. Pause menu top bar: a **MODS** tab after SYSTEM, and after Belmont Minimap's MODS when that mod is installed. The title screen's Settings has the same tab. It opens on a list of registered mods sorted by title, one row each with the title, the `summary` and a **Settings** button. The button opens the mod's rows as a sub-menu titled with the mod's title. B, Esc, Backspace or the **Back** row return to the list; while the sub-menu is open, B does not close the pause menu.
 3. `BepInEx\LogOutput.log` should contain:
    - `Belmont UI loaded`
    - `[ui] <your guid>: settings page '<title>' registered (<n> settings)`
-   - `[ui] Mods Settings tab added to '...'` once a menu is up
-   - `[ui] Mods Settings: <n> mod(s) [<titles>], <m> rows in all` when the rows are built
+   - `[ui] MODS tab added to '...'` once a menu is up
+   - `[ui] MODS tab: <n> mod(s) [<titles>], <m> rows in all` when the rows are built
    - `[ui] '<title>' opened (...)` and `[ui] '<title>' closed (...)` around the sub-menu
-   - with Minimap: `[ui] Belmont Minimap is installed: waiting for its MODS tab ...` then `[ui] Belmont Minimap's MODS tab is there; adding Mods Settings after it`
-4. Failure lines: `[ui] Mods Settings tab not added to '...': <why>` means a game update changed the menus; the game's own menu is left untouched. `[ui] <guid>: row '<label>' not added: ...` names a single row.
+   - with Minimap: `[ui] Belmont Minimap is installed: waiting for its MODS tab ...` then `[ui] Belmont Minimap's MODS tab is there; adding BelmontUI's MODS tab after it`
+4. Failure lines: `[ui] MODS tab not added to '...': <why>` means a game update changed the menus; the game's own menu is left untouched. `[ui] <guid>: row '<label>' not added: ...` names a single row.
 5. Remove `BepInEx\plugins\BelmontUI` and start again. The mod must still load, with no `FileNotFoundException` in the log.
 
 ## Repository notes

@@ -21,7 +21,7 @@ using Object = UnityEngine.Object;
 
 namespace BelmontUi;
 
-// The Mods Settings tab in one tab bar (see ITabHost). Its page content is copied from a native
+// BelmontUI's MODS tab in one tab bar (see ITabHost). Its page content is copied from a native
 // Settings tab (scroll and navigation) and its rows from native rows (toggle, slider, list
 // stepper) whose game binding is stripped and whose control is driven against a BepInEx
 // ConfigEntry instead. On the pause menu the page sits in a shell copied from a native pause-menu
@@ -29,8 +29,9 @@ namespace BelmontUi;
 // when the tab loses focus or the menu closes.
 internal sealed class ModsTab
 {
+    // The object name stays "ModsSettingsTab": Belmont Minimap's tab is "TabContent_MODS", and the
+    // watcher tells the two MODS tabs apart by name.
     private const string TabName = "ModsSettingsTab";
-    private const string TabCaption = "Mods Settings";
     private const float FallbackRowHeight = 60f;
     private const int LongTextLength = 40;
     private const float ToggleDumpDelay = 1f;
@@ -84,12 +85,16 @@ internal sealed class ModsTab
         internal UIListStepper Stepper;
         internal UISelectable NavSelectable;   // what Up/Down lands on: the native row's choice
         internal TMP_Text ValueLabel;           // slider rows: written by us, in the row's format
+        internal int ValueLabelFrames;          // slider rows: frames shown since the row last appeared
         internal GameObject Template;           // the native row this one was copied from
         internal GameObject Object;
         internal bool Live;
         internal UIButton Button;               // button rows: the copied game button (decorative)
         internal float PressedUntil;            // button rows: pressed look until then
         internal TMP_Text LabelText;            // the row's name label
+        internal TMP_Text HintLabel;            // list rows: the description line
+        internal TMP_Text[] ButtonTexts;        // button rows: the caption(s) on the copied button
+        internal TMP_Text SummaryText;          // list rows: the summary
         internal SettingsMenu Opens;            // list rows: the menu their button opens
         internal RectTransform SummaryRect;     // list rows: the summary text box
         internal float SummaryCenter;
@@ -124,6 +129,8 @@ internal sealed class ModsTab
     private bool _imagesDumped;
     private bool _shownLogged;
     private int _fittedCount = -1;
+    private string _textLanguage = GameLanguage.Code;
+    private TMP_Text _emptyHeader;
 
     internal bool Alive => _host.Alive && _tabObject != null && _toggleObject != null;
 
@@ -160,7 +167,7 @@ internal sealed class ModsTab
             foreach (var existing in hostTabs)
             {
                 if (existing.gameObject.name == TabName)
-                    return Fail(host, "a Mods Settings tab is already there");
+                    return Fail(host, "a BelmontUI MODS tab is already there");
             }
 
             // The tab bar's last visible tab: its toggle is the pattern for ours, and on the
@@ -215,7 +222,7 @@ internal sealed class ModsTab
 
             var navigation = settingsCopy.GetComponentInChildren<VerticalNavigationGroup>(true);
             if (navigation == null)
-                BelmontUiPlugin.Logger.LogWarning("[ui] Mods Settings: no navigation group in the copied page, Up/Down may not work");
+                BelmontUiPlugin.Logger.LogWarning("[ui] MODS tab: no navigation group in the copied page, Up/Down may not work");
 
             string pageTitle = CaptionOf(pageSource.tabToggle);
             var titleText = FixPageTexts(settingsCopy, pageTitle);
@@ -236,9 +243,8 @@ internal sealed class ModsTab
             toggleObject.name = TabName + "Toggle";
             foreach (var localizer in toggleObject.GetComponentsInChildren<LocalizeStringEvent>(true))
                 Object.DestroyImmediate(localizer);
-            string caption = Caption(CaptionOf(referenceToggle));
             foreach (var text in toggleObject.GetComponentsInChildren<TMP_Text>(true))
-                text.text = caption;
+                text.text = Texts.TabCaption;
             var toggle = toggleObject.GetComponent<UIToggle>();
             if (toggle == null)
                 return Fail(host, "the copied tab toggle has no UIToggle");
@@ -259,6 +265,7 @@ internal sealed class ModsTab
             var modsTab = new ModsTab(host, tab, tabObject, toggle, toggleObject, referenceToggle, toggleParent, staging, content, navigation, templates);
             modsTab._titleText = titleText;
             modsTab._listTitle = titleText != null ? titleText.text : null;
+            modsTab._upperTitles = IsUpper(pageTitle);
             LiveTabs.Add(modsTab);
             modsTab.Rebuild();
             modsTab.FitToggles();
@@ -269,7 +276,7 @@ internal sealed class ModsTab
             Listen(host.OnCloseView, modsTab.OnUnfocused);
 
             BelmontUiPlugin.Logger.LogInfo(
-                $"[ui] Mods Settings tab added to '{host.Name}' (page from '{pageSource.gameObject.name}'" +
+                $"[ui] MODS tab added to '{host.Name}' (page from '{pageSource.gameObject.name}'" +
                 $"{(host.IsPauseMenu ? $" in a shell from '{reference.gameObject.name}'" : "")}, toggle from " +
                 $"'{referenceToggle.gameObject.name}' under '{toggleParent.name}', " +
                 $"{(host.Initialized ? "after" : "before")} the tab bar initialised)");
@@ -277,7 +284,7 @@ internal sealed class ModsTab
         }
         catch (Exception e)
         {
-            BelmontUiPlugin.Logger.LogError($"[ui] Mods Settings tab not added to '{host.Name}': {e}");
+            BelmontUiPlugin.Logger.LogError($"[ui] MODS tab not added to '{host.Name}': {e}");
             SafeDestroy(toggleObject);
             SafeDestroy(tabObject);
             SafeDestroy(staging);
@@ -310,7 +317,83 @@ internal sealed class ModsTab
         EnsureRegistered(first: false);
         if (_builtRevision != Settings.Revision)
             Rebuild();
+        RefreshLanguage();
         SettleRows();
+    }
+
+    // A language change rewrites the texts of the rows already built instead of rebuilding them:
+    // rows copied after the game's Settings screen has been used come out wrong (blank
+    // checkmarks, slider labels at their minimum), since the native rows they copy are no longer
+    // in their initial state. Then every text of the tab is laid out again: the game's texts
+    // follow a language through BaseFont, whose fallback fonts it swaps, and a text picks up the
+    // new fallback only when it is laid out again (native texts are, as their localizer rewrites
+    // them; ours that keep their content, like "MODS" or a mod's English label, would not be).
+    private void RefreshLanguage()
+    {
+        if (_textLanguage == GameLanguage.Code)
+            return;
+        _textLanguage = GameLanguage.Code;
+        foreach (var bound in _rows)
+        {
+            try
+            {
+                Retext(bound);
+            }
+            catch (Exception e)
+            {
+                BelmontUiPlugin.Logger.LogError($"[ui] {bound.Page.Id}: '{bound.Row.Label}' not retranslated: {e}");
+            }
+        }
+        try
+        {
+            if (_emptyHeader != null)
+                _emptyHeader.text = Texts.NoMods.Current;
+            if (_titleText != null && _openPage != null)
+                _titleText.text = _upperTitles ? _openPage.Title.ToUpperInvariant() : _openPage.Title;
+            if (_toggleObject != null)
+            {
+                foreach (var text in _toggleObject.GetComponentsInChildren<TMP_Text>(true))
+                    text.ForceMeshUpdate(true, true);
+            }
+            if (_tabObject != null)
+            {
+                foreach (var text in _tabObject.GetComponentsInChildren<TMP_Text>(true))
+                    text.ForceMeshUpdate(true, true);
+            }
+        }
+        catch (Exception e)
+        {
+            BelmontUiPlugin.Logger.LogDebug($"[ui] text refresh after the language change failed: {e.Message}");
+        }
+        BelmontUiPlugin.Logger.LogInfo($"[ui] MODS tab: texts in {_textLanguage} ({_rows.Count} rows)");
+    }
+
+    private void Retext(BoundRow bound)
+    {
+        var row = bound.Row;
+        SetLabel(bound.LabelText, bound.Opens != null ? bound.Opens.Title : row.Label);
+        if (bound.HintLabel != null)
+            bound.HintLabel.text = row.Hint ?? "";
+        if (bound.ButtonTexts != null)
+        {
+            foreach (var text in bound.ButtonTexts)
+            {
+                if (text != null)
+                    text.text = row.Text;
+            }
+        }
+        if (bound.SummaryText != null && bound.Opens != null)
+        {
+            bound.SummaryText.text = bound.Opens.Summary ?? "";
+            bound.SummaryFitted = false;
+        }
+        if (bound.Stepper != null)
+        {
+            FillOptions(bound.Stepper, row.Kind == RowKind.Toggle || row.Kind == RowKind.Button
+                ? new[] { Texts.Off.Current, Texts.On.Current }
+                : row.Choices);
+            Apply(bound);
+        }
     }
 
     // Takes the tab out again (in game, the Settings screen keeps its native tabs).
@@ -326,12 +409,12 @@ internal sealed class ModsTab
         }
         catch (Exception e)
         {
-            BelmontUiPlugin.Logger.LogWarning($"[ui] Mods Settings tab removal from '{_host.Name}' failed: {e}");
+            BelmontUiPlugin.Logger.LogWarning($"[ui] MODS tab removal from '{_host.Name}' failed: {e}");
         }
         SafeDestroy(_toggleObject);
         SafeDestroy(_tabObject);
         SafeDestroy(_staging);
-        BelmontUiPlugin.Logger.LogInfo($"[ui] Mods Settings tab removed from '{_host.Name}'");
+        BelmontUiPlugin.Logger.LogInfo($"[ui] MODS tab removed from '{_host.Name}'");
     }
 
     // ---- button rows ----
@@ -486,7 +569,8 @@ internal sealed class ModsTab
             Object.DestroyImmediate(copy);
             return;
         }
-        foreach (var text in copy.GetComponentsInChildren<TMP_Text>(true))
+        bound.ButtonTexts = copy.GetComponentsInChildren<TMP_Text>(true).ToArray();
+        foreach (var text in bound.ButtonTexts)
             text.text = bound.Row.Text;
 
         // Native size, scaled as a whole (frame, ornaments and caption keep their proportions)
@@ -767,6 +851,7 @@ internal sealed class ModsTab
         {
             ClosePage(silent: false);
         }
+        RewriteValueLabels();
         if (_openPage == null)
             FitSummaries();
         var eventSystem = EventSystem.current;
@@ -956,7 +1041,7 @@ internal sealed class ModsTab
                     _toggleWired = true;
                 }
                 if (!first && !listed)
-                    BelmontUiPlugin.Logger.LogInfo($"[ui] Mods Settings tab put back into '{_host.Name}' (another mod rewrote its tabs)");
+                    BelmontUiPlugin.Logger.LogInfo($"[ui] MODS tab put back into '{_host.Name}' (another mod rewrote its tabs)");
                 else if (listed)
                     BelmontUiPlugin.Logger.LogDebug($"[ui] tab moved to the end of '{_host.Name}' (after '{after}')");
             }
@@ -995,7 +1080,7 @@ internal sealed class ModsTab
         }
         catch (Exception e)
         {
-            BelmontUiPlugin.Logger.LogError($"[ui] Mods Settings tab check on '{_host.Name}' failed: {e}");
+            BelmontUiPlugin.Logger.LogError($"[ui] MODS tab check on '{_host.Name}' failed: {e}");
         }
     }
 
@@ -1353,8 +1438,8 @@ internal sealed class ModsTab
             UnblockBack();
         }
 
-        if (pages.Length == 0)
-            AddHeader("No mod has registered settings.", null);
+        _textLanguage = GameLanguage.Code;
+        _emptyHeader = pages.Length == 0 ? AddHeader(Texts.NoMods.Current, null) : null;
         foreach (var page in pages)
         {
             try
@@ -1392,7 +1477,7 @@ internal sealed class ModsTab
         ApplyMode();
         _builtRevision = Settings.Revision;
         BelmontUiPlugin.Logger.LogInfo(
-            $"[ui] Mods Settings: {pages.Length} mod(s) [{string.Join(", ", pages.Select(p => p.Title))}], {_rows.Count} rows in all");
+            $"[ui] MODS tab: {pages.Length} mod(s) [{string.Join(", ", pages.Select(p => p.Title))}], {_rows.Count} rows in all");
     }
 
     // The navigation group's list and the tab's default selection, from the shown rows' selectables.
@@ -1416,12 +1501,12 @@ internal sealed class ModsTab
     }
 
     // A label on its own line, copied from a row's name label.
-    private void AddHeader(string title, SettingsMenu owner)
+    private TMP_Text AddHeader(string title, SettingsMenu owner)
     {
         var source = _templates.Bool ?? _templates.DropBool;
         var template = source.Binding.TryCast<UIBoolSettingBinding>()?.nameLabel ?? source.Binding.TryCast<UIDropdownBoolSettingBinding>()?.nameLabel;
         if (template == null)
-            return;
+            return null;
         var labelObject = Object.Instantiate(template.gameObject, _staging.transform);
         labelObject.name = "Header";
         foreach (var localizer in labelObject.GetComponentsInChildren<LocalizeStringEvent>(true))
@@ -1442,6 +1527,7 @@ internal sealed class ModsTab
         _rowObjects.Add(labelObject);
         if (owner != null)
             _owner[labelObject.Pointer] = owner;
+        return label;
     }
 
     // owner: the sub-menu the row belongs to; null for the list.
@@ -1536,7 +1622,7 @@ internal sealed class ModsTab
         var description = binding.descriptionDisplay;
         HideIndicator(binding.unsavedChangesIndicator);
         Object.DestroyImmediate(binding);
-        SetDescription(description, row.Hint);
+        bound.HintLabel = SetDescription(description, row.Hint);
         Strip(rowObject);
         SetLabel(label, row.Label);
         bound.LabelText = label;
@@ -1545,7 +1631,7 @@ internal sealed class ModsTab
             throw new InvalidOperationException("the copied list row has no UIListStepper");
         bound.Stepper = stepper;
         bound.NavSelectable = NavSelectable(template, rowObject);
-        FillOptions(stepper, new[] { "Off", "On" });
+        FillOptions(stepper, new[] { Texts.Off.Current, Texts.On.Current });
         HideDropdownBackground(stepper);
         HideStrayGraphics(rowObject, stepper);
         var sfx = template.Sfx;
@@ -1626,7 +1712,7 @@ internal sealed class ModsTab
         var description = binding.descriptionDisplay;
         HideIndicator(binding.unsavedChangesIndicator);
         Object.DestroyImmediate(binding);
-        SetDescription(description, row.Hint);
+        bound.HintLabel = SetDescription(description, row.Hint);
         Strip(rowObject);
         SetLabel(label, row.Label);
         bound.LabelText = label;
@@ -1700,6 +1786,27 @@ internal sealed class ModsTab
         finally
         {
             _refreshing = false;
+        }
+    }
+
+    // A copied slider writes its own label (the minimum, in its own format) when it first runs,
+    // which is on a frame after its row appears, so ours is written again for the first frames
+    // a slider row is shown.
+    private void RewriteValueLabels()
+    {
+        foreach (var bound in _rows)
+        {
+            if (bound.ValueLabel == null || bound.Object == null)
+                continue;
+            if (!bound.Object.activeInHierarchy)
+            {
+                bound.ValueLabelFrames = 0;
+                continue;
+            }
+            if (bound.ValueLabelFrames >= 3)
+                continue;
+            bound.ValueLabelFrames++;
+            WriteValueLabel(bound);
         }
     }
 
@@ -1855,6 +1962,7 @@ internal sealed class ModsTab
     private bool _waitBackRelease;
     private TMP_Text _titleText;
     private string _listTitle;
+    private bool _upperTitles;   // the native page titles are upper case, so a mod's title is too
     private readonly Dictionary<IntPtr, SettingsMenu> _owner = new();   // row object -> its menu (absent: the list)
     private readonly List<InputAction> _blockedBack = new();
     private bool _blockLogged;
@@ -1867,7 +1975,7 @@ internal sealed class ModsTab
     {
         var row = new SettingRow
         {
-            Label = page.Title, Kind = RowKind.Button, ButtonText = "Settings", Sound = ButtonSound.None,
+            LabelText = page.LocalizedTitle, Kind = RowKind.Button, ButtonLabel = Texts.Settings, Sound = ButtonSound.None,
             OnPress = () => _pendingOpen = page,
         };
         int before = _rows.Count;
@@ -1884,7 +1992,7 @@ internal sealed class ModsTab
     {
         var row = new SettingRow
         {
-            Label = "Back", Kind = RowKind.Button, ButtonText = "Back", Sound = ButtonSound.None,
+            LabelText = Texts.Back, Kind = RowKind.Button, ButtonLabel = Texts.Back, Sound = ButtonSound.None,
             OnPress = () => _pendingClose = true,
         };
         AddRow(page, row, page);
@@ -1911,6 +2019,7 @@ internal sealed class ModsTab
                 Object.DestroyImmediate(localizer);
             var text = copy.GetComponent<TMP_Text>();
             text.text = summary;
+            bound.SummaryText = text;
             text.alignment = TextAlignmentOptions.Center;
             text.enableWordWrapping = false;
             text.overflowMode = TextOverflowModes.Ellipsis;
@@ -2002,10 +2111,7 @@ internal sealed class ModsTab
                 rowObject.SetActive(show);
         }
         if (_titleText != null && _listTitle != null)
-        {
-            bool upper = _listTitle == _listTitle.ToUpperInvariant();
-            _titleText.text = _openPage == null ? _listTitle : upper ? _openPage.Title.ToUpperInvariant() : _openPage.Title;
-        }
+            _titleText.text = _openPage == null ? _listTitle : _upperTitles ? _openPage.Title.ToUpperInvariant() : _openPage.Title;
         var content = _content.TryCast<RectTransform>();
         if (content != null)
             LayoutRebuilder.ForceRebuildLayoutImmediate(content);
@@ -2170,6 +2276,7 @@ internal sealed class ModsTab
     {
         if (_builtRevision != Settings.Revision)
             Rebuild();
+        RefreshLanguage();
         ForceVisible();
         RefreshValues();
         // The mode's rows only (the list, or the open sub-menu), with navigation computed from live
@@ -2274,7 +2381,7 @@ internal sealed class ModsTab
             catch (Exception e)
             {
                 LiveTabs.RemoveAt(i);
-                BelmontUiPlugin.Logger.LogWarning($"[ui] Mods Settings per-frame upkeep stopped: {e.Message}");
+                BelmontUiPlugin.Logger.LogWarning($"[ui] MODS tab per-frame upkeep stopped: {e.Message}");
             }
         }
         for (int i = LiveButtons.Count - 1; i >= 0; i--)
@@ -2692,7 +2799,7 @@ internal sealed class ModsTab
     // balance warning) goes, and no localizer gets to put them back.
     private static TMP_Text FixPageTexts(GameObject tabObject, string sourceTitle)
     {
-        string title = Caption(sourceTitle);
+        string title = Texts.TabCaption;
         int titles = 0, cleared = 0;
         TMP_Text titleText = null;
         foreach (var text in tabObject.GetComponentsInChildren<TMP_Text>(true))
@@ -2744,14 +2851,15 @@ internal sealed class ModsTab
             label.text = text;
     }
 
-    private static void SetDescription(UILocalizedString description, string hint)
+    private static TMP_Text SetDescription(UILocalizedString description, string hint)
     {
         if (description == null)
-            return;
+            return null;
         var text = description.textDisplay;
         Object.DestroyImmediate(description);
         if (text != null)
             text.text = hint ?? "";
+        return text;
     }
 
     private static void FillOptions(UIListStepper stepper, string[] labels)
@@ -2793,11 +2901,9 @@ internal sealed class ModsTab
         return text != null && text.text != null ? text.text.Trim() : "";
     }
 
-    // "MODS SETTINGS" when the native captions are upper case.
-    private static string Caption(string sample) =>
-        sample.Length > 0 && sample == sample.ToUpperInvariant() && sample != sample.ToLowerInvariant()
-            ? TabCaption.ToUpperInvariant()
-            : TabCaption;
+    // True for "GAMEPLAY", false for "Gameplay" (and for texts without letters).
+    private static bool IsUpper(string sample) =>
+        sample.Length > 0 && sample == sample.ToUpperInvariant() && sample != sample.ToLowerInvariant();
 
     private static void Play(EventReference sfx)
     {
@@ -2833,7 +2939,7 @@ internal sealed class ModsTab
 
     private static ModsTab Fail(ITabHost host, string why)
     {
-        BelmontUiPlugin.Logger.LogWarning($"[ui] Mods Settings tab not added to '{host.Name}': {why}");
+        BelmontUiPlugin.Logger.LogWarning($"[ui] MODS tab not added to '{host.Name}': {why}");
         return null;
     }
 

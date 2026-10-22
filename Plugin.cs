@@ -5,7 +5,7 @@ using BepInEx.Unity.IL2CPP;
 namespace BelmontUi;
 
 /// <summary>
-/// The BelmontUI plugin itself. It adds the Mods Settings tab; other mods put their settings on it
+/// The BelmontUI plugin itself. It adds the MODS tab; other mods put their settings on it
 /// through <see cref="Settings"/>. On its own it only adds the tab, which then says that no mod has
 /// registered settings.
 /// </summary>
@@ -21,7 +21,7 @@ public class BelmontUiPlugin : BasePlugin
     public const string Guid = "leandrobueno.belmontui";
 
     /// <summary>The plugin version.</summary>
-    public const string Version = "0.2.2";
+    public const string Version = "0.3.0";
 
     internal static ManualLogSource Logger;
 

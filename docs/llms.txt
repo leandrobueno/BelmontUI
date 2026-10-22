@@ -1,6 +1,6 @@
 # BelmontUI
 
-> BelmontUI is a BepInEx 6 IL2CPP library for Castlevania: Belmont's Curse mods. It adds a MODS SETTINGS tab to the game's pause menu and title-screen Settings, listing each registered mod with a sub-menu built from the game's own widgets. Mods soft-depend on it (GUID `leandrobueno.belmontui`, namespace `BelmontUi`) and register settings once in `Load()` with `BelmontUi.Settings.Register(guid, title, menu => ...)` or `Settings.RegisterFromConfig(guid, title, Config)`. Every `BelmontUi.*` reference must live in a class entered only after `IL2CPPChainloader.Instance.Plugins.ContainsKey("leandrobueno.belmontui")`, or the mod throws FileNotFoundException without the library. MIT licensed. Current version 0.2.2.
+> BelmontUI is a BepInEx 6 IL2CPP library for Castlevania: Belmont's Curse mods. It adds a MODS tab to the game's pause menu and title-screen Settings, listing each registered mod with a sub-menu built from the game's own widgets. Mods soft-depend on it (GUID `leandrobueno.belmontui`, namespace `BelmontUi`) and register settings once in `Load()` with `BelmontUi.Settings.Register(guid, title, menu => ...)` or `Settings.RegisterFromConfig(guid, title, Config)`. Every `BelmontUi.*` reference must live in a class entered only after `IL2CPPChainloader.Instance.Plugins.ContainsKey("leandrobueno.belmontui")`, or the mod throws FileNotFoundException without the library. MIT licensed. Current version 0.2.2.
 
 ## Docs
 
@@ -16,5 +16,5 @@
 
 ## Optional
 
-- [Changelog](https://leandrobueno.github.io/BelmontUI/changelog): versions 0.1.0 to 0.2.2
+- [Changelog](https://leandrobueno.github.io/BelmontUI/changelog): versions 0.1.0 to 0.3.0
 - [Source](https://github.com/leandrobueno/BelmontUI)

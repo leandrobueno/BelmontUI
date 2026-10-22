@@ -6,7 +6,7 @@ nav_order: 3
 # API reference
 {: .no_toc }
 
-Version 0.2.2. Everything is in the `BelmontUi` namespace. The public surface uses plain .NET types only (`ConfigEntryBase`, `ConfigFile`, strings, numbers, `Action`), so it does not change when the game's interop assemblies are regenerated. The dll ships with `BelmontUI.xml`, so your IDE shows these descriptions as tooltips.
+Version 0.3.0. Everything is in the `BelmontUi` namespace. The public surface uses plain .NET types only (`ConfigEntryBase`, `ConfigFile`, strings, numbers, `Action`), so it does not change when the game's interop assemblies are regenerated. The dll ships with `BelmontUI.xml`, so your IDE shows these descriptions as tooltips.
 
 1. TOC
 {:toc}
@@ -15,8 +15,9 @@ Version 0.2.2. Everything is in the `BelmontUi` namespace. The public surface us
 
 | Type | Public members | For |
 |---|---|---|
-| `Settings` (static) | `Register`, `RegisterFromConfig`, `Get`, `Unregister` | your mod |
-| `SettingsMenu` (sealed, no public constructor) | `Id`, `Title`, `Summary`, `Toggle`, `Slider`, `IntSlider`, `Choice`, `Key`, `Button`, `ResetButton`, `ResetAll`, `Save` | your mod |
+| `Settings` (static) | `Register`, `RegisterFromConfig`, `Get`, `Unregister`, `Language`, `LanguageChanged` | your mod |
+| `SettingsMenu` (sealed, no public constructor) | `Id`, `Title`, `Summary`, `LocalizedTitle`, `LocalizedSummary`, `Toggle`, `Slider`, `IntSlider`, `Choice`, `Key`, `Button`, `ResetButton`, `ResetAll`, `Save` | your mod |
+| `LocalizedText` (sealed) | constructors, indexer, `Add`, `Resolve`, `Current`, `Text`, `Locales`, `IsEmpty`, conversions from `string` and `Dictionary<string, string>` | your mod (see Translations) |
 | `BelmontUiPlugin` | `Guid`, `Version`, `Load` | BepInEx |
 | `BelmontUiWatcher` | a Unity component | BelmontUI itself; don't add or call it |
 
@@ -215,9 +216,27 @@ Every builder method checks its row at once and throws `ArgumentException` namin
 | `Row 'X' (Key) needs Keys, at least one key name` | Empty key list. |
 | `Row 'X' (Key) needs a string entry; 'Key' holds Int32` | Wrong entry type for a key. |
 
-## Texts
+## Translations
 
-Labels, hints, summaries and captions are shown as given. BelmontUI translates nothing; pass your own translations if you want them.
+The tab caption is **MODS** in every language. BelmontUI's own texts (Settings, Back, the reset row's name, button and hint, the empty-list line, On / Off) come in the game's eleven languages; where the game has the same term (Back, Settings, its Default settings dialog), they are the game's own words.
+
+A mod's texts can be translated with `LocalizedText`:
+
+| Member | |
+|---|---|
+| `new LocalizedText(text)` | A plain text, shown where no version for the current language exists. A `string` converts to this implicitly. |
+| `new LocalizedText(IDictionary<string, string>)`, `new LocalizedText(text, dictionary)` | Versions by locale code. A `Dictionary<string, string>` converts implicitly. |
+| `this[locale]`, `Add(locale, text)` | Adds or replaces one language's version (object and collection initializers work). The getter returns that exact version or null. |
+| `Resolve(locale)`, `Current`, `ToString()` | The text for a language, or for the game's current one. |
+| `Text`, `Locales`, `IsEmpty` | The plain text, the codes with a version, and whether there is anything at all. |
+
+Locale codes: `en`, `fr`, `de`, `es`, `it`, `pt-BR`, `ru`, `ja`, `ko`, `zh-CN`, `zh-TW`; case and `_` / `-` don't matter. Resolution order: the exact code, the code without region (`pt` for `pt-BR`; never between the two Chinese), `en`, the plain text, any version.
+
+Overloads that take `LocalizedText` in place of `string`: `Settings.Register(guid, LocalizedText title, build, LocalizedText summary = null)`, `Settings.RegisterFromConfig(guid, LocalizedText title, config, extra, LocalizedText summary = null)`, and on `SettingsMenu`: `Toggle`, `Slider`, `IntSlider`, `Key`, `Button`, `ResetButton(LocalizedText label, ...)` and `Choice(entry, LocalizedText label, string[] values, LocalizedText[] labels = null, LocalizedText hint = null)`. `SettingsMenu.LocalizedTitle` and `LocalizedSummary` hold the per-language title and summary; `Title` and `Summary` read them in the current language and, when set, give every language the same text. The string overloads are unchanged, so code written for 0.2 compiles and runs as before. `ResetButton()` with its default texts is translated by the library, for mods built against 0.2 too.
+
+`Settings.Language` is the game's current locale code, in lower case as the game reports it (`"pt-br"`, `"zh-cn"`; `"en"` until the game's localization has started) and `Settings.LanguageChanged` is raised on the main thread with the new code. The tab rewrites its texts in the new language by itself; the order of the mod list is set when the tab builds, by the titles in the language of that moment.
+
+The game's fonts are fixed atlases holding only the characters the game's texts use: 171 Latin, 179 Cyrillic, about 1,650 Japanese, 1,040 Korean, 2,150 Simplified and 2,070 Traditional Chinese characters; the non-Latin ones have no lower-case `j`. Characters outside them show as blank boxes. Option values, key names and slider formats are not translated.
 
 ## When values are saved
 
@@ -225,4 +244,4 @@ A control writes its `ConfigEntry` the moment it changes, so your mod's `Setting
 
 ## `BelmontUiPlugin`
 
-The plugin class. `BelmontUiPlugin.Guid` is `"leandrobueno.belmontui"` and `BelmontUiPlugin.Version` is `"0.2.2"`. Copy the GUID string into a constant of your own instead, as the examples do. That keeps every `BelmontUi.*` reference out of your plugin class.
+The plugin class. `BelmontUiPlugin.Guid` is `"leandrobueno.belmontui"` and `BelmontUiPlugin.Version` is `"0.3.0"`. Copy the GUID string into a constant of your own instead, as the examples do. That keeps every `BelmontUi.*` reference out of your plugin class.

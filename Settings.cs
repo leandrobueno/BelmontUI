@@ -8,7 +8,7 @@ namespace BelmontUi;
 
 /// <summary>
 /// Entry point of the library: declare a mod's settings once, in your plugin's <c>Load()</c>, and they
-/// appear on the <b>Mods Settings</b> tab (pause menu top bar; the title screen's Settings screen).
+/// appear on the <b>MODS</b> tab (pause menu top bar; the title screen's Settings screen).
 /// </summary>
 /// <remarks>
 /// The tab lists every registered mod with its title, summary and a Settings button that opens the
@@ -29,7 +29,7 @@ public static class Settings
     /// <param name="title">The mod's name, shown on its row of the list and at the top of its sub-menu. Null or empty uses <paramref name="guid"/>.</param>
     /// <param name="build">
     /// Adds the rows, in display order, through the builder methods of the menu it receives
-    /// (<see cref="SettingsMenu.Toggle"/>, <see cref="SettingsMenu.Slider"/>, ...). Runs once, right away.
+    /// (<see cref="SettingsMenu.Toggle(ConfigEntryBase, string, string)"/>, <see cref="SettingsMenu.Slider(ConfigEntryBase, string, float, float, float, string, string)"/>, ...). Runs once, right away.
     /// Null registers an empty menu.
     /// </param>
     /// <param name="summary">One line describing the mod, shown in the middle of its row on the list (optional).</param>
@@ -45,7 +45,26 @@ public static class Settings
     /// }, summary: "What my mod does, in one line.");
     /// </code>
     /// </example>
-    public static SettingsMenu Register(string guid, string title, Action<SettingsMenu> build, string summary = null)
+    public static SettingsMenu Register(string guid, string title, Action<SettingsMenu> build, string summary = null) =>
+        Register(guid, (LocalizedText)title, build, (LocalizedText)summary);
+
+    /// <summary>Registers a mod's settings menu with its title and summary in several languages; otherwise the same as <see cref="Register(string, string, Action{SettingsMenu}, string)"/>.</summary>
+    /// <param name="guid">Your plugin's GUID. Registering the same GUID again replaces the earlier menu.</param>
+    /// <param name="title">The mod's name, per language. Null or empty uses <paramref name="guid"/>.</param>
+    /// <param name="build">Adds the rows, in display order, through the builder methods. Runs once, right away. Null registers an empty menu.</param>
+    /// <param name="summary">One line describing the mod, per language (optional).</param>
+    /// <returns>The menu, for later changes.</returns>
+    /// <exception cref="ArgumentException"><paramref name="guid"/> is empty, or a row added by <paramref name="build"/> is invalid (the message names the row).</exception>
+    /// <example>
+    /// <code>
+    /// BelmontUi.Settings.Register(Plugin.Guid, "My Mod", menu =>
+    /// {
+    ///     menu.Toggle(Plugin.Enabled, new LocalizedText("Enabled") { ["fr"] = "Activé", ["de"] = "Aktiviert" });
+    ///     menu.ResetButton();
+    /// }, summary: new LocalizedText("What my mod does.") { ["fr"] = "Ce que fait mon mod." });
+    /// </code>
+    /// </example>
+    public static SettingsMenu Register(string guid, LocalizedText title, Action<SettingsMenu> build, LocalizedText summary = null)
     {
         if (string.IsNullOrEmpty(guid))
             throw new ArgumentException("A menu needs the mod's GUID", nameof(guid));
@@ -78,7 +97,24 @@ public static class Settings
     /// <remarks>A "Restore defaults" row is added at the end unless <paramref name="extra"/> added a button row of its own.</remarks>
     /// <exception cref="ArgumentNullException"><paramref name="config"/> is null.</exception>
     public static SettingsMenu RegisterFromConfig(string guid, string title, ConfigFile config, Action<SettingsMenu> extra = null,
-        string summary = null)
+        string summary = null) =>
+        RegisterFromConfig(guid, (LocalizedText)title, config, extra, (LocalizedText)summary);
+
+    /// <summary>
+    /// Registers a menu built from a config file, with the title and summary in several languages;
+    /// otherwise the same as <see cref="RegisterFromConfig(string, string, ConfigFile, Action{SettingsMenu}, string)"/>.
+    /// The generated rows' labels and hints come from the config file and are not translated; rows added
+    /// by <paramref name="extra"/> can be.
+    /// </summary>
+    /// <param name="guid">Your plugin's GUID; registering the same GUID again replaces the earlier menu.</param>
+    /// <param name="title">The mod's name, per language.</param>
+    /// <param name="config">Your plugin's <c>Config</c>.</param>
+    /// <param name="extra">Optional: adds more rows after the generated ones.</param>
+    /// <param name="summary">One line describing the mod, per language (optional).</param>
+    /// <returns>The menu.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="config"/> is null.</exception>
+    public static SettingsMenu RegisterFromConfig(string guid, LocalizedText title, ConfigFile config, Action<SettingsMenu> extra = null,
+        LocalizedText summary = null)
     {
         if (config == null)
             throw new ArgumentNullException(nameof(config));
@@ -93,7 +129,7 @@ public static class Settings
     }
 
     /// <summary>The menu registered under a plugin GUID.</summary>
-    /// <param name="guid">The plugin GUID passed to <see cref="Register"/> or <see cref="RegisterFromConfig"/>.</param>
+    /// <param name="guid">The plugin GUID passed to <see cref="Register(string, string, Action{SettingsMenu}, string)"/> or <see cref="RegisterFromConfig(string, string, ConfigFile, Action{SettingsMenu}, string)"/>.</param>
     /// <returns>The menu, or null when nothing is registered under that GUID.</returns>
     public static SettingsMenu Get(string guid) =>
         guid != null && ByGuid.TryGetValue(guid, out var page) ? page : null;
@@ -106,6 +142,40 @@ public static class Settings
             return;
         PageList.Remove(page);
         Revision++;
+    }
+
+    /// <summary>
+    /// The game's current language, as the game's locale code (lower case): <c>"en"</c>, <c>"fr"</c>,
+    /// <c>"de"</c>, <c>"es"</c>, <c>"it"</c>, <c>"pt-br"</c>, <c>"ru"</c>, <c>"ja"</c>, <c>"ko"</c>,
+    /// <c>"zh-cn"</c> or <c>"zh-tw"</c>. <c>"en"</c> until the game's localization has started. Compare it
+    /// ignoring case; <see cref="LocalizedText"/> does.
+    /// </summary>
+    public static string Language => GameLanguage.Code;
+
+    /// <summary>
+    /// Raised on Unity's main thread when the player changes the game's language, with the new
+    /// locale code. The tab already shows <see cref="LocalizedText"/>s in the new language; use this
+    /// for texts your mod builds itself.
+    /// </summary>
+    public static event Action<string> LanguageChanged;
+
+    // The tabs notice the new language themselves (ModsTab.RefreshLanguage) and rewrite their texts.
+    internal static void RaiseLanguageChanged(string code)
+    {
+        var handlers = LanguageChanged;
+        if (handlers == null)
+            return;
+        foreach (Action<string> handler in handlers.GetInvocationList())
+        {
+            try
+            {
+                handler(code);
+            }
+            catch (Exception e)
+            {
+                BelmontUiPlugin.Logger.LogError($"[ui] a LanguageChanged handler failed: {e}");
+            }
+        }
     }
 
     // By title, case-insensitive, as the list shows them.

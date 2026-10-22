@@ -9,7 +9,7 @@ Every version from 0.1.0 to 0.2.2 was built on 2026-10-19, 0.3.0 on 2026-10-21; 
 
 | Version | Git commit |
 |---|---|
-| 0.4.0 | not committed yet |
+| 0.4.0 | d092b2b |
 | 0.3.0 | `887f461`, `53497ab` (row alignment) |
 | 0.2.2 | `0d1b056` (includes 0.2.0 and 0.2.1) |
 | 0.1.9 | `b917e54` (includes 0.1.0 to 0.1.8) |

@@ -21,7 +21,7 @@ On its own the tab says that no mod has registered settings. It fills up as you 
 
 1. The tab opens on a list of the mods that registered settings, sorted by name. Each row shows the mod's name, a one-line description and a **Settings** button.
 2. Press **Settings** (A, Enter or a click) to open that mod's settings. The page title changes to the mod's name.
-3. Change values with the usual controls: A toggles a checkbox, Left / Right moves sliders and lists. Changes apply at once.
+3. Change values with the usual controls: A toggles a checkbox, Left / Right moves sliders and lists. Changes apply at once. On a button row (a controller icon or key name in a frame), press A, then the button, key or combination you want; **B**, **Esc** or **Backspace** cancel. Each setting's description is next to its name.
 4. Press **B**, **Esc** or **Backspace**, or choose the **Back** row at the end, to return to the list. The mod's settings are saved to disk then. B goes back to the list here; it does not close the pause menu.
 
 Switching to another tab with LB / RB while a mod's settings are open saves them, and the tab opens on the list again next time. Mods that use BelmontUI work without it as well; you then change their settings in `BepInEx\config\<mod>.cfg`.
@@ -146,6 +146,8 @@ Why each piece is there:
 | The `try/catch` inside `MenuGlue` | It catches `ArgumentException` from a badly declared row. It is not the presence check. |
 
 `SettingRows` is Ability Wheel's own list of its settings; your mod can call the builder methods directly. See [Recipes](recipes) for shorter examples.
+
+Besides value rows and buttons, a menu can hold **binding rows** (`Binding`), where the player presses the button, key or combination to use, and **section headers** (`Header`). `VisibleWhen` shows the row added just before it only while a condition holds. See [Recipes](recipes#a-gamepad-button-picked-by-pressing-it) and the [API reference](api#binding).
 
 ## Check it worked
 

@@ -21,6 +21,15 @@ BelmontUi.Settings.Register(Plugin.Guid, "My Mod", menu =>
 
 The dependency is optional. A mod that uses BelmontUI still loads and works without it, minus its entry on the tab.
 
+## What a menu can hold
+
+- **Value rows**: toggles, sliders, whole-number sliders, list steppers and key pickers, each bound to a `ConfigEntry`.
+- **Binding rows**: the player selects the row and presses a gamepad button, a key or a combination (hold one, press another), as on the game's Controls screen. The row shows the game's own Xbox or PlayStation icons, following the controller in use.
+- **Buttons**: an action of your own, and **Restore defaults**.
+- **Section headers** that group the rows after them, and rows shown **only while a condition holds**, such as a binding that only matters when a toggle is on.
+- **Descriptions**: every row's hint is shown next to its label, up to two lines; a row whose description wraps grows a little to fit it.
+- **Translations**: BelmontUI's own texts follow the game's language in its eleven languages, and mods can translate theirs with `LocalizedText`.
+
 ## Documentation map
 
 | Page | For | What it covers |

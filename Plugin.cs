@@ -21,7 +21,7 @@ public class BelmontUiPlugin : BasePlugin
     public const string Guid = "leandrobueno.belmontui";
 
     /// <summary>The plugin version.</summary>
-    public const string Version = "0.3.0";
+    public const string Version = "0.4.0";
 
     internal static ManualLogSource Logger;
 

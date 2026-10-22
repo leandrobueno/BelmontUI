@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using BepInEx.Configuration;
 using Doozy.Runtime.UIManager;
 using Doozy.Runtime.UIManager.Animators;
 using Doozy.Runtime.UIManager.Components;
@@ -35,6 +36,13 @@ internal sealed class ModsTab
     private const string ContentHolderName = "BelmontUiContent";
     private const float FallbackRowHeight = 60f;
     private const int LongTextLength = 40;
+    private const float SummaryLargest = 0.68f;     // description font size, as a part of the label's
+    private const float SummarySmallest = 0.52f;
+    private const float RowPadding = 16f;           // above and below a two-line description (~10 px at 1080p)
+    private const float ColumnLimit = 0.36f;        // descriptions start at most this far in (part of the row)
+    private const float ColumnGap = 0.025f;
+    private const float SummaryLineSpacing = -15f;   // a little tighter than the font's 1.5-em lines
+    private const string TwoLines = "Ag\nAg";
     private const float ToggleDumpDelay = 1f;
     private const float ReleaseSeconds = 0.15f;      // how long a pressed button shows its pressed look
     private const float TopPadding = 0.075f;         // pause menu: room above the page title, of the page height
@@ -100,6 +108,13 @@ internal sealed class ModsTab
         internal RectTransform SummaryRect;     // list rows: the summary text box
         internal float SummaryCenter;
         internal bool SummaryFitted;
+        internal float SummarySizeMax;          // description font sizes, from the label's
+        internal float SummarySizeMin;
+        internal int ShownFrames;               // frames the row has been on screen in a row
+        internal float BaseHeight;              // the row's layout height as copied (one line)
+        internal float LabelBaseY = float.NaN;  // label: its y when re-anchored on the row's middle
+        internal RectTransform ButtonRect;      // button rows: the copied button and its anchor at base height
+        internal float ButtonAnchorY;
         internal UISelectable Selectable => NavSelectable ?? (UISelectable)Toggle ?? (UISelectable)Slider ?? Stepper;
     }
 
@@ -132,6 +147,20 @@ internal sealed class ModsTab
     private int _fittedCount = -1;
     private string _textLanguage = GameLanguage.Code;
     private TMP_Text _emptyHeader;
+    private readonly List<(TMP_Text Text, SettingRow Row)> _headers = new();
+    private readonly Dictionary<IntPtr, SettingRow> _rowOf = new();     // row object -> its row (VisibleWhen)
+
+    // Binding rows: the row listening for an input, and what it has seen so far.
+    private BoundRow _capture;
+    private bool _captureArmed;          // every control was up since listening started
+    private string _captureHeld;         // the first control pressed, while it is held
+    private float _captureLastInput;
+    private bool _captureWaitRelease;    // after listening: the menu stays blocked until every control is up
+    private float _captureEndedAt;
+    private BindingDevices _captureDevices;
+    private const float ReleaseWaitSeconds = 2f;
+    private readonly List<InputAction> _blockedForCapture = new();
+    private string _glyphPrefix;
 
     internal bool Alive => _host.Alive && _tabObject != null && _toggleObject != null;
 
@@ -349,6 +378,11 @@ internal sealed class ModsTab
         {
             if (_emptyHeader != null)
                 _emptyHeader.text = Texts.NoMods.Current;
+            foreach (var (text, row) in _headers)
+            {
+                if (text != null)
+                    text.text = row.Label;
+            }
             if (_titleText != null && _openPage != null)
                 _titleText.text = _upperTitles ? _openPage.Title.ToUpperInvariant() : _openPage.Title;
             if (_toggleObject != null)
@@ -388,9 +422,12 @@ internal sealed class ModsTab
             bound.SummaryText.text = bound.Opens.Summary ?? "";
             bound.SummaryFitted = false;
         }
+        if (bound.SummaryText != null && bound.Opens == null && bound != _capture)
+            bound.SummaryText.text = row.Hint ?? "";
+        bound.SummaryFitted = false;
         if (bound.Stepper != null)
         {
-            FillOptions(bound.Stepper, row.Kind == RowKind.Toggle || row.Kind == RowKind.Button
+            FillOptions(bound.Stepper, row.Kind == RowKind.Toggle || row.IsAction
                 ? new[] { Texts.Off.Current, Texts.On.Current }
                 : row.Choices);
             Apply(bound);
@@ -589,6 +626,8 @@ internal sealed class ModsTab
         var element = copy.GetComponent<LayoutElement>() ?? copy.AddComponent<LayoutElement>();
         element.ignoreLayout = true;
         buttonRect.anchorMin = buttonRect.anchorMax = new Vector2(region.center.x, barCenter);
+        bound.ButtonRect = buttonRect;
+        bound.ButtonAnchorY = barCenter;
         buttonRect.pivot = new Vector2(0.5f, 0.5f);
         buttonRect.sizeDelta = native;
         buttonRect.anchoredPosition = Vector2.zero;
@@ -627,6 +666,11 @@ internal sealed class ModsTab
     private void Press(BoundRow bound)
     {
         var row = bound.Row;
+        if (row.Kind == RowKind.Binding)
+        {
+            StartCapture(bound);
+            return;
+        }
         bound.PressedUntil = Time.unscaledTime + ReleaseSeconds;
         BelmontUiPlugin.Logger.LogInfo($"[ui] {bound.Page.Id}: '{row.Label}' pressed (selection {SelectionName()})");
         try
@@ -801,13 +845,30 @@ internal sealed class ModsTab
     }
 
     // Rows (and headers) fully inside the band show; the others are scaled to zero.
+    // Every row clipped to zero gets its scale back, so the next layout pass sees all shown rows at
+    // full height (before a mode or visibility change re-clips them).
+    private void ResetClip()
+    {
+        if (_hiddenScale.Count == 0)
+            return;
+        foreach (var rowObject in _rowObjects)
+        {
+            var rect = rowObject != null ? rowObject.transform.TryCast<RectTransform>() : null;
+            if (rect != null && _hiddenScale.TryGetValue(rect.Pointer, out var scale))
+                rect.localScale = scale;
+        }
+        _hiddenScale.Clear();
+    }
+
     private void ApplyClip()
     {
         if (!_scrollReady)
             return;
         foreach (var rowObject in _rowObjects)
         {
-            var rect = rowObject != null ? rowObject.transform.TryCast<RectTransform>() : null;
+            // Rows switched off have no layout position yet; scaling one to zero would keep it
+            // collapsed (the layout counts child scale) once it is shown again.
+            var rect = rowObject != null && rowObject.activeSelf ? rowObject.transform.TryCast<RectTransform>() : null;
             if (rect == null)
                 continue;
             var (top, bottom) = Extent(rect);
@@ -836,7 +897,13 @@ internal sealed class ModsTab
             UnblockBack();
         }
         if (!_tab.IsFocused())
+        {
+            if (_capture != null)
+                EndCapture(null, "the tab lost the focus");
             return;
+        }
+        CaptureFrame();
+        RefreshGlyphs();
         if (_pendingOpen != null)
         {
             var page = _pendingOpen;
@@ -848,13 +915,13 @@ internal sealed class ModsTab
             _pendingClose = false;
             ClosePage(silent: false);
         }
-        else if (_openPage != null && BackPressed())
+        else if (_openPage != null && _capture == null && !_captureWaitRelease && BackPressed())
         {
             ClosePage(silent: false);
         }
         RewriteValueLabels();
-        if (_openPage == null)
-            FitSummaries();
+        RefreshChanged();
+        FitSummaries();
         var eventSystem = EventSystem.current;
         var current = eventSystem != null ? eventSystem.currentSelectedGameObject : null;
         if (current != null && IsButtonPart(current))
@@ -1448,12 +1515,20 @@ internal sealed class ModsTab
     private void Rebuild()
     {
         LiveButtons.RemoveAll(e => e.Tab == this);
+        if (_capture != null)
+            EndCapture(null, "the tab was rebuilt");
+        _headers.Clear();
+        _rowOf.Clear();
         foreach (var rowObject in _rowObjects)
             SafeDestroy(rowObject);
         _rowObjects.Clear();
         _rows.Clear();
         _owner.Clear();
         _imagesDumped = false;
+
+        // Where the selection was, so a rebuild while the tab is in use keeps it on a live row.
+        int selected = _rows.FindIndex(b => b.Selectable != null && EventSystem.current != null &&
+            EventSystem.current.currentSelectedGameObject == b.Selectable.gameObject);
 
         var pages = Settings.Snapshot();
         // A menu registered again is a new object: the open one is found again by its GUID.
@@ -1503,6 +1578,14 @@ internal sealed class ModsTab
 
         ApplyMode();
         _builtRevision = Settings.Revision;
+        WatchConfigFiles(pages);
+        if (_tab.IsFocused())
+        {
+            var row = selected >= 0 && selected < _rows.Count && _rows[selected].Object != null && _rows[selected].Object.activeSelf
+                ? _rows[selected]
+                : FirstVisibleRow();
+            Select(row);
+        }
         BelmontUiPlugin.Logger.LogInfo(
             $"[ui] MODS tab: {pages.Length} mod(s) [{string.Join(", ", pages.Select(p => p.Title))}], {_rows.Count} rows in all");
     }
@@ -1564,10 +1647,17 @@ internal sealed class ModsTab
         GameObject rowObject;
         switch (row.Kind)
         {
+            case RowKind.Header:
+                var header = AddHeader(row.Label, owner);
+                _headers.Add((header, row));
+                if (header != null)
+                    _rowOf[header.gameObject.Pointer] = row;
+                return;
             case RowKind.Toggle:
             case RowKind.Button:
+            case RowKind.Binding:
                 rowObject = _templates.Bool != null ? CopyToggleRow(row, bound) : CopyDropBoolRow(row, bound);
-                if (row.Kind == RowKind.Button)
+                if (row.IsAction)
                 {
                     AddButtonVisual(rowObject, bound);
                     LiveButtons.Add((this, bound));
@@ -1596,6 +1686,10 @@ internal sealed class ModsTab
         rowObject.transform.SetAsLastSibling();
         _rowObjects.Add(rowObject);
         _rows.Add(bound);
+        _rowOf[rowObject.Pointer] = row;
+        // The hint shows next to the label (a mod's list row has its summary instead).
+        if (owner != null && !string.IsNullOrEmpty(row.Hint))
+            AddSummary(bound, row.Hint);
         if (owner != null)
             _owner[rowObject.Pointer] = owner;
     }
@@ -1624,7 +1718,7 @@ internal sealed class ModsTab
         {
             if (_refreshing)
                 return;
-            if (row.Kind == RowKind.Button)
+            if (row.IsAction)
             {
                 // Any press, on or off: the row is put back off when the button is released.
                 if (bound.PressedUntil <= 0f)
@@ -1667,7 +1761,7 @@ internal sealed class ModsTab
         {
             if (_refreshing)
                 return;
-            if (row.Kind == RowKind.Button)
+            if (row.IsAction)
             {
                 if (bound.PressedUntil <= 0f)
                     Press(bound);
@@ -1788,14 +1882,16 @@ internal sealed class ModsTab
     private void Apply(BoundRow bound)
     {
         var row = bound.Row;
-        if (row.Kind == RowKind.Button && bound.PressedUntil > 0f)
+        if (row.IsAction && bound.PressedUntil > 0f)
             return;   // released (and put back off) a moment after the press
+        if (row.Kind == RowKind.Binding && bound != _capture)
+            ShowBinding(bound);
         _refreshing = true;
         try
         {
             if (bound.Toggle != null)
             {
-                bool on = row.Kind != RowKind.Button && row.GetBool();
+                bool on = !row.IsAction && row.GetBool();
                 if (bound.Toggle.isOn != on)
                     UIToggleExtensions.SetIsOn(bound.Toggle, on, false, true);
             }
@@ -1806,7 +1902,7 @@ internal sealed class ModsTab
             }
             else if (bound.Stepper != null)
             {
-                int index = row.Kind == RowKind.Button ? 0 : row.Kind == RowKind.Toggle ? (row.GetBool() ? 1 : 0) : row.GetChoice();
+                int index = row.IsAction ? 0 : row.Kind == RowKind.Toggle ? (row.GetBool() ? 1 : 0) : row.GetChoice();
                 bound.Stepper.SetIndex(index, true, true);
             }
         }
@@ -1993,7 +2089,6 @@ internal sealed class ModsTab
     private readonly Dictionary<IntPtr, SettingsMenu> _owner = new();   // row object -> its menu (absent: the list)
     private readonly List<InputAction> _blockedBack = new();
     private bool _blockLogged;
-    private bool _summaryLogged;
 
     private static readonly string[] BackWords = { "Close", "Cancel", "Back" };
 
@@ -2025,7 +2120,10 @@ internal sealed class ModsTab
         AddRow(page, row, page);
     }
 
-    // The summary: a copy of the row's label, smaller, centred between the label and the button.
+    // A row's description (a mod's summary on the list, a setting's hint in a sub-menu): a copy of
+    // the row's label, smaller, in a column that starts after the page's longest label and ends
+    // before the controls, up to two lines, centred on the label. FitSummaries places it once the
+    // row's labels are drawn and can be measured.
     private void AddSummary(BoundRow bound, string summary)
     {
         if (string.IsNullOrEmpty(summary) || bound.LabelText == null || bound.Object == null)
@@ -2045,30 +2143,30 @@ internal sealed class ModsTab
             foreach (var localizer in copy.GetComponentsInChildren<LocalizeStringEvent>(true))
                 Object.DestroyImmediate(localizer);
             var text = copy.GetComponent<TMP_Text>();
+            float labelSize = text.enableAutoSizing ? text.fontSizeMax : text.fontSize;
+            bound.SummarySizeMax = labelSize * SummaryLargest;
+            bound.SummarySizeMin = labelSize * SummarySmallest;
             text.text = summary;
             bound.SummaryText = text;
-            text.alignment = TextAlignmentOptions.Center;
-            text.enableWordWrapping = false;
+            text.alignment = TextAlignmentOptions.MidlineLeft;
+            text.enableAutoSizing = false;
+            text.fontSize = bound.SummarySizeMax;
+            text.enableWordWrapping = true;
             text.overflowMode = TextOverflowModes.Ellipsis;
-            if (text.enableAutoSizing)
-                text.fontSizeMax *= 0.75f;
-            else
-                text.fontSize *= 0.75f;
+            text.lineSpacing = SummaryLineSpacing;
             foreach (var fitter in copy.GetComponentsInChildren<ContentSizeFitter>(true))
                 Object.DestroyImmediate(fitter);
 
-            // A quarter of the row in to just before the button for now; FitSummaries moves the
-            // start to just after the mod's name once the row is on screen and its text measured.
+            // Hidden until FitSummaries has measured the labels and placed it.
             var rect = copy.transform.TryCast<RectTransform>();
             rect.pivot = new Vector2(0.5f, 0.5f);
             rect.anchoredPosition = Vector2.zero;
-            rect.localScale = Vector3.one;
+            rect.localScale = Vector3.zero;
             text.margin = Vector4.zero;
             var element = copy.GetComponent<LayoutElement>() ?? copy.AddComponent<LayoutElement>();
             element.ignoreLayout = true;
             bound.SummaryRect = rect;
             bound.SummaryCenter = center;
-            PlaceSummary(bound, 0.25f);
         }
         catch (Exception e)
         {
@@ -2076,52 +2174,183 @@ internal sealed class ModsTab
         }
     }
 
-    // The summary box from start (a fraction of the row width) to just before the button area.
+    // The description from start (a fraction of the row width) to just before the controls: the
+    // largest size from 75 % to 55 % of the label's at which the text takes at most two lines, else
+    // the smallest size with "..." after the second line.
     private void PlaceSummary(BoundRow bound, float start)
     {
         var rect = bound.SummaryRect;
+        var text = bound.SummaryText;
         var rowRect = bound.Object.transform.TryCast<RectTransform>();
         float rowWidth = rowRect.rect.width;
         float right = Mathf.Max(0.45f, _templates.Control.xMin - 0.02f);
         start = Mathf.Clamp(start, 0.08f, right - 0.15f);
+        float width = (right - start) * rowWidth;
+
+        // Two lines measured as two lines (line spacing included): two single lines fall short and
+        // the second line was cut.
+        float sizeMax = bound.SummarySizeMax, sizeMin = bound.SummarySizeMin;
+        float size = sizeMin;
+        float step = Mathf.Max(0.5f, (sizeMax - sizeMin) / 8f);
+        for (float candidate = sizeMax; candidate >= sizeMin - 0.01f; candidate -= step)
+        {
+            text.fontSize = candidate;
+            float twoLines = text.GetPreferredValues(TwoLines, width, 0f).y;
+            if (text.GetPreferredValues(text.text, width, 0f).y <= twoLines * 1.02f)
+            {
+                size = candidate;
+                break;
+            }
+        }
+        text.fontSize = size;
+        float height = text.GetPreferredValues(TwoLines, width, 0f).y * 1.08f;
         rect.anchorMin = rect.anchorMax = new Vector2((start + right) / 2f, bound.SummaryCenter);
-        rect.sizeDelta = new Vector2((right - start) * rowWidth, bound.LabelText.rectTransform.rect.height);
+        rect.sizeDelta = new Vector2(width, height);
+        rect.anchoredPosition = Vector2.zero;
+        rect.localScale = Vector3.one;
+
+        // A description on two lines makes its row taller by one line (see GrowRow); one line keeps
+        // the game's height.
+        float oneLine = text.GetPreferredValues("Ag", width, 0f).y;
+        float needed = text.GetPreferredValues(text.text, width, 0f).y;
+        GrowRow(bound, needed > oneLine * 1.5f ? Mathf.Min(needed, height) - oneLine + 2f * RowPadding : 0f);
     }
 
-    // Once a list row is on screen, its name's rendered text bounds say where the name ends; the
-    // summary then starts just after it. (Measuring before the row was shown gave a width several
-    // times too large, so 0.2.1 squeezed the summary next to the button.)
+    private int _rowsResized;
+
+    // A row whose description takes two lines grows by the extra line: its layout height (the row
+    // and its Background), which the dark strip and the selection ornaments follow (they stretch with
+    // the row or sit on its middle). The label, which the game anchors to the top on toggle and slider
+    // rows, and BelmontUI's own button and description are re-anchored so they stay centred.
+    private void GrowRow(BoundRow bound, float extra)
+    {
+        var row = bound.Object;
+        var element = row != null ? row.GetComponent<LayoutElement>() : null;
+        if (element == null)
+            return;
+        if (bound.BaseHeight <= 0f)
+            bound.BaseHeight = element.preferredHeight > 1f ? element.preferredHeight : row.transform.TryCast<RectTransform>().rect.height;
+        float baseHeight = bound.BaseHeight;
+        float height = baseHeight + Mathf.Max(0f, extra);
+        if (Mathf.Abs(element.preferredHeight - height) < 0.5f)
+            return;
+        element.preferredHeight = height;
+        element.minHeight = height;
+        var background = row.transform.Find("Background");
+        var inner = background != null ? background.GetComponent<LayoutElement>() : null;
+        if (inner != null)
+        {
+            inner.preferredHeight = height;
+            inner.minHeight = height;
+        }
+
+        var label = bound.LabelText != null ? bound.LabelText.rectTransform : null;
+        if (label != null && Mathf.Approximately(label.anchorMin.y, label.anchorMax.y))
+        {
+            if (float.IsNaN(bound.LabelBaseY))
+                bound.LabelBaseY = label.anchoredPosition.y + (label.anchorMin.y - 0.5f) * baseHeight;
+            label.anchorMin = new Vector2(label.anchorMin.x, 0.5f);
+            label.anchorMax = new Vector2(label.anchorMax.x, 0.5f);
+            label.anchoredPosition = new Vector2(label.anchoredPosition.x, bound.LabelBaseY);
+        }
+        if (bound.ButtonRect != null)
+        {
+            float y = 0.5f + (bound.ButtonAnchorY - 0.5f) * baseHeight / height;
+            bound.ButtonRect.anchorMin = new Vector2(bound.ButtonRect.anchorMin.x, y);
+            bound.ButtonRect.anchorMax = new Vector2(bound.ButtonRect.anchorMax.x, y);
+        }
+        if (bound.SummaryRect != null)
+        {
+            float y = 0.5f + (bound.SummaryCenter - 0.5f) * baseHeight / height;
+            bound.SummaryRect.anchorMin = new Vector2(bound.SummaryRect.anchorMin.x, y);
+            bound.SummaryRect.anchorMax = new Vector2(bound.SummaryRect.anchorMax.x, y);
+        }
+        _rowsResized++;
+    }
+
+    // The column for the descriptions of the rows on screen (the list, or the open sub-menu): just
+    // after the longest label, the same on every row. Labels are measured from their rendered text
+    // once the rows have been drawn for a couple of frames (measured earlier, a label came out
+    // several times too wide).
     private void FitSummaries()
     {
+        List<BoundRow> shown = null;
+        bool pending = false;
         foreach (var bound in _rows)
         {
-            if (bound.SummaryRect == null || bound.SummaryFitted || bound.Object == null || !bound.Object.activeInHierarchy)
+            if (bound.Object == null || !bound.Object.activeInHierarchy)
+            {
+                if (bound.Object != null)
+                    bound.ShownFrames = 0;
                 continue;
-            bound.SummaryFitted = true;
-            try
+            }
+            bound.ShownFrames++;
+            (shown ??= new List<BoundRow>()).Add(bound);
+            if (bound.SummaryRect != null && !bound.SummaryFitted)
+                pending = true;
+        }
+        if (!pending || shown.Any(b => b.ShownFrames < 3))
+            return;
+        try
+        {
+            float longest = 0f, rowWidth = 0f;
+            string longestLabel = null;
+            var ends = new Dictionary<BoundRow, float>();
+            foreach (var bound in shown)
             {
                 var label = bound.LabelText;
+                // Rows scrolled out of the band are scaled to zero and can't be measured.
+                if (label == null || bound.Object.transform.localScale.x < 0.01f)
+                    continue;
                 label.ForceMeshUpdate();
                 var bounds = label.textBounds;
                 var rowRect = bound.Object.transform.TryCast<RectTransform>();
-                float rowWidth = rowRect.rect.width;
+                rowWidth = rowRect.rect.width;
                 if (rowWidth <= 1f || bounds.size.x <= 1f)
                     continue;
                 float nameEnd = rowRect.InverseTransformPoint(label.rectTransform.TransformPoint(new Vector3(bounds.max.x, 0f, 0f))).x;
-                float start = (nameEnd - rowRect.rect.xMin) / rowWidth + 0.03f;
-                PlaceSummary(bound, start);
-                if (!_summaryLogged)
+                float end = (nameEnd - rowRect.rect.xMin) / rowWidth;
+                if (end < 0.6f)
                 {
-                    _summaryLogged = true;
-                    BelmontUiPlugin.Logger.LogInfo(
-                        $"[ui] summary of '{bound.Row.Label}': name ends at {(nameEnd - rowRect.rect.xMin) / rowWidth:0.###} of a {rowWidth:0}-unit row, " +
-                        $"summary {bound.SummaryRect.anchorMin.x - bound.SummaryRect.sizeDelta.x / rowWidth / 2f:0.###}.. size {bound.SummaryRect.sizeDelta}");
+                    ends[bound] = end;
+                    if (end > longest)
+                    {
+                        longest = end;
+                        longestLabel = bound.Row.Label;
+                    }
                 }
             }
-            catch (Exception e)
+            // One column for the page, but no further in than ColumnLimit: a row whose label is
+            // longer starts its description just after its own label.
+            float column = Mathf.Min(longest > 0f ? longest : 0.25f, ColumnLimit) + ColumnGap;
+            _rowsResized = 0;
+            foreach (var bound in shown)
             {
-                BelmontUiPlugin.Logger.LogDebug($"[ui] '{bound.Row.Label}': summary not fitted: {e.Message}");
+                if (bound.SummaryRect == null)
+                    continue;
+                float start = ends.TryGetValue(bound, out var own) ? Mathf.Max(column, own + ColumnGap) : column;
+                PlaceSummary(bound, start);
+                bound.SummaryFitted = true;
             }
+            if (_rowsResized > 0)
+            {
+                ResetClip();
+                var content = _content.TryCast<RectTransform>();
+                if (content != null)
+                    LayoutRebuilder.ForceRebuildLayoutImmediate(content);
+                if (_scrollReady)
+                {
+                    _lastSelected = null;
+                    ApplyClip();
+                }
+                BelmontUiPlugin.Logger.LogInfo($"[ui] descriptions: {_rowsResized} row(s) resized for two-line descriptions");
+            }
+            BelmontUiPlugin.Logger.LogInfo(
+                $"[ui] descriptions: longest label '{longestLabel}' ends at {longest:0.###} of a {rowWidth:0}-unit row, column from {column:0.###}");
+        }
+        catch (Exception e)
+        {
+            BelmontUiPlugin.Logger.LogDebug($"[ui] descriptions not placed: {e.Message}");
         }
     }
 
@@ -2133,12 +2362,13 @@ internal sealed class ModsTab
             if (rowObject == null)
                 continue;
             _owner.TryGetValue(rowObject.Pointer, out var owner);
-            bool show = owner == _openPage;
+            bool show = owner == _openPage && RowShown(rowObject);
             if (rowObject.activeSelf != show)
                 rowObject.SetActive(show);
         }
         if (_titleText != null && _listTitle != null)
             _titleText.text = _openPage == null ? _listTitle : _upperTitles ? _openPage.Title.ToUpperInvariant() : _openPage.Title;
+        ResetClip();
         var content = _content.TryCast<RectTransform>();
         if (content != null)
             LayoutRebuilder.ForceRebuildLayoutImmediate(content);
@@ -2231,6 +2461,442 @@ internal sealed class ModsTab
             (Mouse.current != null && Mouse.current.leftButton.isPressed);
     }
 
+    // ---- entries changed elsewhere ----
+
+    // The config files the menus' rows are bound to. A change to any of their entries, by anyone (a
+    // mod's SettingChanged handler moving other entries, a reset, a reload), is redrawn on the rows
+    // that show it the next frame the tab has the focus.
+    private static readonly HashSet<ConfigFile> WatchedFiles = new();
+    private static readonly HashSet<ConfigEntryBase> ChangedEntries = new();
+
+    private static void WatchConfigFiles(IEnumerable<SettingsMenu> pages)
+    {
+        foreach (var row in pages.SelectMany(p => p.Rows))
+        {
+            var file = row.IsSetting ? row.Entry?.ConfigFile : null;
+            if (file != null && WatchedFiles.Add(file))
+                file.SettingChanged += (_, e) =>
+                {
+                    if (e?.ChangedSetting != null)
+                        ChangedEntries.Add(e.ChangedSetting);
+                };
+        }
+    }
+
+    private void RefreshChanged()
+    {
+        if (ChangedEntries.Count == 0)
+            return;
+        UpdateVisibility();
+        foreach (var bound in _rows)
+        {
+            if (bound == _capture || bound.Row.Entry == null || !ChangedEntries.Contains(bound.Row.Entry))
+                continue;
+            try
+            {
+                Apply(bound);
+            }
+            catch (Exception e)
+            {
+                BelmontUiPlugin.Logger.LogDebug($"[ui] '{bound.Row.Label}': redraw after a change failed: {e.Message}");
+            }
+        }
+        ChangedEntries.Clear();
+    }
+
+    // ---- rows shown on a condition ----
+
+    private bool RowShown(GameObject rowObject) =>
+        !_rowOf.TryGetValue(rowObject.Pointer, out var row) || row.IsVisible();
+
+    // After a setting changed: rows of the open sub-menu whose VisibleWhen changed are shown or hidden,
+    // the layout closes or opens the gap, navigation is rebuilt, and a selection on a row that went
+    // away moves to the nearest row still shown.
+    private void UpdateVisibility()
+    {
+        if (_openPage == null)
+            return;
+        var eventSystem = EventSystem.current;
+        var selected = eventSystem != null ? eventSystem.currentSelectedGameObject : null;
+        int selectedIndex = selected == null ? -1 : _rows.FindIndex(b => b.Object != null && IsUnder(selected.transform, b.Object.transform));
+        int changed = 0;
+        foreach (var rowObject in _rowObjects)
+        {
+            if (rowObject == null || !_owner.TryGetValue(rowObject.Pointer, out var owner) || owner != _openPage)
+                continue;
+            bool show = RowShown(rowObject);
+            if (rowObject.activeSelf == show)
+                continue;
+            rowObject.SetActive(show);
+            changed++;
+        }
+        if (changed == 0)
+            return;
+        ResetClip();
+        var content = _content.TryCast<RectTransform>();
+        if (content != null)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(content);
+        UpdateNavigation();
+        if (selectedIndex >= 0 && (_rows[selectedIndex].Object == null || !_rows[selectedIndex].Object.activeSelf))
+            Select(NearestShownRow(selectedIndex));
+        if (_scrollReady)
+        {
+            _lastSelected = null;   // scrolled back into view next frame
+            ApplyClip();
+        }
+        BelmontUiPlugin.Logger.LogInfo($"[ui] '{_openPage.Title}': {changed} row(s) shown or hidden by their conditions");
+    }
+
+    // The closest row still on screen below the given one, else above it.
+    private BoundRow NearestShownRow(int index)
+    {
+        for (int distance = 1; distance < _rows.Count; distance++)
+        {
+            foreach (int i in new[] { index + distance, index - distance })
+            {
+                if (i < 0 || i >= _rows.Count)
+                    continue;
+                var bound = _rows[i];
+                if (bound.Object != null && bound.Object.activeSelf && bound.Selectable != null)
+                    return bound;
+            }
+        }
+        return FirstVisibleRow();
+    }
+
+    // ---- binding rows ----
+
+    // Pressing a binding row: its line says "Press new button", the button shows "...", and every
+    // input action the game has on is switched off, so nothing else reacts to what is pressed. The
+    // controls are read straight from the devices.
+    private void StartCapture(BoundRow bound)
+    {
+        if (_capture != null)
+            EndCapture(null, "another row started listening");
+        _capture = bound;
+        _captureArmed = false;
+        _captureHeld = null;
+        _captureLastInput = Time.unscaledTime;
+        bound.PressedUntil = float.MaxValue;
+        BlockCapture();
+        ShowBinding(bound);
+        Play(_templates.Bool != null ? _templates.Bool.Sfx : _templates.ApplySfx);
+        BelmontUiPlugin.Logger.LogInfo($"[ui] {bound.Page.Id}: '{bound.Row.Label}' listening ({bound.Row.Options.Devices}, was '{bound.Row.GetText()}')");
+    }
+
+    private void CaptureFrame()
+    {
+        float now = Time.unscaledTime;
+        if (_capture == null)
+        {
+            // The menu gets its input back once the row's devices are let go, or after a moment in
+            // any case (a key or button the Input System still reports down must not lock the menu).
+            if (_captureWaitRelease)
+            {
+                string held = Held(_captureDevices);
+                if (held == null || now - _captureEndedAt > ReleaseWaitSeconds)
+                {
+                    if (held != null)
+                        BelmontUiPlugin.Logger.LogInfo($"[ui] binding: menu input back although '{held}' still reads as held");
+                    _captureWaitRelease = false;
+                    UnblockCapture();
+                }
+            }
+            return;
+        }
+        var options = _capture.Row.Options;
+        if (!_captureArmed)
+        {
+            // The press that opened the row (A, Enter, a click) and a refused input must be let go
+            // first; controls still down after a moment are ignored (only new presses count).
+            string held = Held(options.Devices);
+            if (held == null || now - _captureLastInput > ReleaseWaitSeconds)
+            {
+                if (held != null)
+                    BelmontUiPlugin.Logger.LogInfo($"[ui] binding: listening although '{held}' still reads as held");
+                _captureArmed = true;
+                _captureLastInput = now;
+            }
+            return;
+        }
+        // Cancel as on the game's Controls screen (its UI/Close action): B, Esc or Backspace.
+        var keyboard = Keyboard.current;
+        var pad = Gamepad.current;
+        if ((keyboard != null && (keyboard.escapeKey.wasPressedThisFrame || keyboard.backspaceKey.wasPressedThisFrame)) ||
+            (pad != null && pad.buttonEast.wasPressedThisFrame))
+        {
+            EndCapture(null, "cancelled");
+            return;
+        }
+        if (_captureHeld == null && now - _captureLastInput > Math.Max(1f, options.TimeoutSeconds))
+        {
+            EndCapture(null, "no input in time");
+            return;
+        }
+
+        var presses = PressedThisFrame(options.Devices);
+        string pressed = presses.FirstOrDefault(p => p != _captureHeld);
+        if (_captureHeld == null)
+        {
+            if (pressed == null)
+                return;
+            _captureLastInput = now;
+            if (!options.AllowCombinations)
+            {
+                Offer(pressed);
+                return;
+            }
+            // Two controls down in the same frame (a quick Shift+G): the modifier, or the one listed
+            // first, is the held one.
+            var second = presses.Skip(1).FirstOrDefault(p => ControlBinding.IsGamepad(p) == ControlBinding.IsGamepad(pressed));
+            if (second != null)
+            {
+                bool swap = IsModifier(second) && !IsModifier(pressed);
+                Offer(swap ? ControlBinding.Make(second, pressed) : ControlBinding.Make(pressed, second));
+                return;
+            }
+            _captureHeld = pressed;
+            return;
+        }
+        if (pressed != null && pressed != _captureHeld && ControlBinding.IsGamepad(pressed) == ControlBinding.IsGamepad(_captureHeld))
+        {
+            Offer(ControlBinding.Make(_captureHeld, pressed));
+            return;
+        }
+        if (ControlBinding.Button(_captureHeld)?.isPressed != true)
+            Offer(_captureHeld);
+    }
+
+    // A complete input: stored when it passes the row's checks, else the reason shows on the row's
+    // line and the row keeps listening once everything is let go.
+    private void Offer(string binding)
+    {
+        var bound = _capture;
+        var options = bound.Row.Options;
+        LocalizedText reason = null;
+        foreach (var part in ControlBinding.Parse(binding))
+        {
+            bool allowed = options.Allowed == null || options.Allowed.Count == 0 || options.Allowed.Contains(part);
+            bool reserved = options.Reserved != null && options.Reserved.Contains(part);
+            if (!allowed || reserved)
+            {
+                reason = options.ReservedReason ?? Texts.AlreadyAssigned;
+                break;
+            }
+        }
+        if (reason == null && options.Validate != null)
+        {
+            try
+            {
+                reason = options.Validate(binding);
+            }
+            catch (Exception e)
+            {
+                BelmontUiPlugin.Logger.LogError($"[ui] {bound.Page.Id}: '{bound.Row.Label}' check of '{binding}' failed: {e}");
+                reason = Texts.AlreadyAssigned;
+            }
+        }
+        if (reason != null)
+        {
+            BelmontUiPlugin.Logger.LogInfo($"[ui] {bound.Page.Id}: '{bound.Row.Label}' refused '{binding}': {reason.Current}");
+            if (bound.SummaryText != null)
+                bound.SummaryText.text = reason.Current;
+            _captureHeld = null;
+            _captureArmed = false;
+            _captureLastInput = Time.unscaledTime;
+            return;
+        }
+        bound.Row.SetText(binding);
+        EndCapture(binding, "bound");
+    }
+
+    private void EndCapture(string binding, string why)
+    {
+        var bound = _capture;
+        _capture = null;
+        _captureHeld = null;
+        if (bound == null)
+            return;
+        bound.PressedUntil = Time.unscaledTime;
+        _captureEndedAt = Time.unscaledTime;
+        _captureDevices = bound.Row.Options.Devices;
+        _captureWaitRelease = _blockedForCapture.Count > 0;
+        if (!_captureWaitRelease)
+            UnblockCapture();
+        try
+        {
+            if (bound.SummaryText != null)
+                bound.SummaryText.text = bound.Row.Hint ?? "";
+            ShowBinding(bound);
+            if (binding != null)
+                Play(_templates.ApplySfx.IsNull && _templates.Bool != null ? _templates.Bool.Sfx : _templates.ApplySfx);
+        }
+        catch (Exception e)
+        {
+            BelmontUiPlugin.Logger.LogDebug($"[ui] '{bound.Row.Label}': binding display failed: {e.Message}");
+        }
+        BelmontUiPlugin.Logger.LogInfo($"[ui] {bound.Page.Id}: '{bound.Row.Label}' {why}: '{bound.Row.GetText()}'");
+        // The mod's SettingChanged handlers may have changed this entry back or others with it.
+        RefreshValues();
+    }
+
+    // The button caption: the binding (icons for the controller in use), or "..." while listening,
+    // with "Press new button" on the row's line.
+    private void ShowBinding(BoundRow bound)
+    {
+        bool listening = bound == _capture;
+        if (bound.ButtonTexts != null)
+        {
+            string caption = listening ? "..." : bound.Row.Text;
+            foreach (var text in bound.ButtonTexts)
+            {
+                if (text != null)
+                {
+                    text.richText = true;
+                    text.text = caption;
+                }
+            }
+        }
+        if (listening && bound.SummaryText != null)
+            bound.SummaryText.text = Texts.PressButton.Current;
+    }
+
+    // The captions follow the controller in use (Xbox or PlayStation icons).
+    private void RefreshGlyphs()
+    {
+        string prefix = ControlGlyphs.Prefix;
+        if (prefix == _glyphPrefix)
+            return;
+        bool first = _glyphPrefix == null;
+        _glyphPrefix = prefix;
+        if (!first)
+            BelmontUiPlugin.Logger.LogInfo($"[ui] binding rows: controller icons now '{prefix}'");
+        foreach (var bound in _rows)
+        {
+            if (bound.Row.Kind == RowKind.Binding)
+                ShowBinding(bound);
+        }
+    }
+
+    // The controls of the given devices pressed this frame, modifiers first. B, Esc and Backspace
+    // cancel instead, as on the game's Controls screen, so they are never bound.
+    private static List<string> PressedThisFrame(BindingDevices devices)
+    {
+        var pressed = new List<string>();
+        if ((devices & BindingDevices.Gamepad) != 0 && Gamepad.current != null)
+        {
+            foreach (var control in ControlBinding.GamepadControls)
+            {
+                if (control != "buttonEast" && ControlBinding.Button(control)?.wasPressedThisFrame == true)
+                    pressed.Add(control);
+            }
+        }
+        if ((devices & BindingDevices.Keyboard) != 0)
+        {
+            foreach (var control in ControlBinding.MouseControls)
+            {
+                if (ControlBinding.Button(control)?.wasPressedThisFrame == true)
+                    pressed.Add(control);
+            }
+            // Every key, every frame while listening: "any key" stays pressed while Shift is held,
+            // so it doesn't show the G of a Shift+G.
+            var keyboard = Keyboard.current;
+            if (keyboard != null && keyboard.anyKey.isPressed)
+            {
+                foreach (var key in keyboard.allKeys)
+                {
+                    if (key != null && key.wasPressedThisFrame && key.keyCode != Key.Escape && key.keyCode != Key.Backspace)
+                        pressed.Add(key.keyCode.ToString());
+                }
+            }
+        }
+        return pressed.OrderBy(p => IsModifier(p) ? 0 : 1).ToList();
+    }
+
+    private static bool IsModifier(string control) =>
+        control is "LeftShift" or "RightShift" or "LeftCtrl" or "RightCtrl" or "LeftAlt" or "RightAlt";
+
+    // The first control of the given devices held now (the confirm inputs A, Enter, Space and the
+    // left mouse button always count), or null.
+    private static string Held(BindingDevices devices)
+    {
+        if (Gamepad.current != null)
+        {
+            foreach (var control in ControlBinding.GamepadControls)
+            {
+                if (((devices & BindingDevices.Gamepad) != 0 || control == "buttonSouth") && ControlBinding.Button(control)?.isPressed == true)
+                    return control;
+            }
+        }
+        var keyboard = Keyboard.current;
+        if (keyboard != null && keyboard.anyKey.isPressed)
+        {
+            foreach (var key in keyboard.allKeys)
+            {
+                if (key == null || !key.isPressed)
+                    continue;
+                var code = key.keyCode;
+                if ((devices & BindingDevices.Keyboard) != 0 || code == Key.Enter || code == Key.NumpadEnter || code == Key.Space)
+                    return code.ToString();
+            }
+        }
+        if ((devices & BindingDevices.Keyboard) != 0)
+        {
+            foreach (var control in ControlBinding.MouseControls)
+            {
+                if (ControlBinding.Button(control)?.isPressed == true)
+                    return control;
+            }
+        }
+        return Mouse.current != null && Mouse.current.leftButton.isPressed ? "mouse left button" : null;
+    }
+
+    // Every input action the game has on goes off while a row listens (and until its input is let go),
+    // so the press doesn't also navigate, switch tabs or close the menu. Only actions that were on
+    // are touched, and all of them come back: switching off every action of a map makes the map read
+    // as off too, so the map's state can't decide (unlike BlockBack, which leaves the maps on).
+    private void BlockCapture()
+    {
+        if (_blockedForCapture.Count > 0)
+            return;
+        foreach (var obj in Resources.FindObjectsOfTypeAll(Il2CppType.Of<InputActionAsset>()))
+        {
+            var asset = obj?.TryCast<InputActionAsset>();
+            if (asset == null)
+                continue;
+            foreach (var map in asset.actionMaps)
+            {
+                if (map == null || !map.enabled)
+                    continue;
+                foreach (var action in map.actions)
+                {
+                    if (action == null || !action.enabled)
+                        continue;
+                    action.Disable();
+                    _blockedForCapture.Add(action);
+                }
+            }
+        }
+        BelmontUiPlugin.Logger.LogDebug($"[ui] binding: {_blockedForCapture.Count} input action(s) off while listening");
+    }
+
+    private void UnblockCapture()
+    {
+        foreach (var action in _blockedForCapture)
+        {
+            try
+            {
+                if (!_blockedBack.Contains(action))
+                    action.Enable();
+            }
+            catch (Exception e)
+            {
+                BelmontUiPlugin.Logger.LogDebug($"[ui] input action not restored: {e.Message}");
+            }
+        }
+        _blockedForCapture.Clear();
+    }
+
     // While a sub-menu is open, the game's enabled Close / Cancel / Back actions are off, so B
     // goes back to the list instead of closing the menu. Only actions that were on are touched.
     private void BlockBack()
@@ -2283,6 +2949,10 @@ internal sealed class ModsTab
 
     private void OnUnfocused()
     {
+        if (_capture != null)
+            EndCapture(null, "the tab lost the focus");
+        _captureWaitRelease = false;
+        UnblockCapture();
         SaveAll();
         _pendingOpen = null;
         _pendingClose = false;

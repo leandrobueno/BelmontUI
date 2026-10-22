@@ -123,7 +123,7 @@ public static class Settings
             foreach (var pair in config)
                 AddFromConfig(page, pair.Value);
             extra?.Invoke(page);
-            if (!page.Rows.Any(r => !r.IsSetting))
+            if (!page.Rows.Any(r => r.Kind == RowKind.Button))
                 page.ResetButton();
         }, summary);
     }

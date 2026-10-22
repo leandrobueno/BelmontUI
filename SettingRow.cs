@@ -13,6 +13,8 @@ internal enum RowKind
     Choice,      // a string or enum entry: the game's list row (Left / Right)
     Key,         // a string entry holding an Input System key name, as a list of keys
     Button,      // an action: a row with a button in the game's style
+    Binding,     // a string entry holding a ControlBinding: a button row that captures the next input
+    Header,      // a title line that groups the rows after it; no control
 }
 
 internal enum ButtonSound
@@ -55,6 +57,13 @@ internal sealed class SettingRow
     public Action OnPress { get; set; }
     public LocalizedText ButtonLabel { get; set; }
 
+    // Binding: what the capture accepts.
+    public BindingOptions Options { get; set; }
+
+    // Shown only while this returns true (null: always). Checked when the menu opens and whenever an
+    // entry of the page's config files changes.
+    public Func<bool> VisibleWhen { get; set; }
+
     internal ButtonSound Sound = ButtonSound.Apply;
 
     public SettingRow() { }
@@ -73,10 +82,14 @@ internal sealed class SettingRow
     internal string[] Labels => LabelTexts?.Select(t => LocalizedText.Show(t) ?? "").ToArray();
     internal string ButtonText => LocalizedText.Show(ButtonLabel);
     internal ConfigEntryBase Entry => BindsTo;
-    internal bool IsSetting => Kind != RowKind.Button;
+    internal bool IsSetting => Kind != RowKind.Button && Kind != RowKind.Header;
+    // Shown as a button: a press runs OnPress, or (Binding) starts listening for an input.
+    internal bool IsAction => Kind == RowKind.Button || Kind == RowKind.Binding;
     internal string[] OptionValues => Kind == RowKind.Key ? Keys : Values;
     internal string[] Choices => Kind == RowKind.Key ? Keys.Select(SettingsMenu.KeyName).ToArray() : Labels ?? Values;
-    internal string Text => string.IsNullOrEmpty(ButtonText) ? Label : ButtonText;
+    internal string Text =>
+        Kind == RowKind.Binding ? ControlBinding.Display(GetText())
+        : string.IsNullOrEmpty(ButtonText) ? Label : ButtonText;
     internal float EffectiveStep => Kind == RowKind.IntSlider ? Math.Max(1f, MathF.Round(Step)) : Math.Max(0f, Step);
     internal string EffectiveFormat => !string.IsNullOrEmpty(Format) ? Format : Kind == RowKind.IntSlider ? "{0}" : "{0:0.##}";
 
@@ -87,6 +100,8 @@ internal sealed class SettingRow
         if (LabelText == null || LabelText.IsEmpty)
             throw new ArgumentException("A row needs a Label");
         string name = $"Row '{Label}' ({Kind})";
+        if (Kind == RowKind.Header)
+            return;
         if (Kind == RowKind.Button)
         {
             if (OnPress == null)
@@ -130,6 +145,10 @@ internal sealed class SettingRow
                     throw new ArgumentException($"{name} needs a string or enum entry; '{BindsTo.Definition.Key}' holds {type.Name}");
                 }
                 break;
+            case RowKind.Binding:
+                if (type != typeof(string))
+                    throw new ArgumentException($"{name} needs a string entry; '{BindsTo.Definition.Key}' holds {type.Name}");
+                break;
             case RowKind.Key:
                 if (Keys == null || Keys.Length == 0)
                     throw new ArgumentException($"{name} needs Keys, at least one key name");
@@ -141,7 +160,27 @@ internal sealed class SettingRow
         }
     }
 
+    // A condition that throws counts as true, so a bug in it never hides a row for good.
+    internal bool IsVisible()
+    {
+        if (VisibleWhen == null)
+            return true;
+        try
+        {
+            return VisibleWhen();
+        }
+        catch (Exception e)
+        {
+            BelmontUiPlugin.Logger.LogError($"[ui] row '{Label}': VisibleWhen failed, row shown: {e.Message}");
+            return true;
+        }
+    }
+
     internal bool GetBool() => Entry.BoxedValue is bool b && b;
+
+    internal string GetText() => Entry.BoxedValue as string ?? "";
+
+    internal void SetText(string value) => Entry.BoxedValue = value ?? "";
 
     internal void SetBool(bool value) => Entry.BoxedValue = value;
 

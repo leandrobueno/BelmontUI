@@ -107,7 +107,7 @@ public sealed class SettingsMenu
     /// <summary>Adds an On / Off row, the game's checkbox row.</summary>
     /// <param name="entry">A <c>bool</c> config entry; checked means <c>true</c>.</param>
     /// <param name="label">The row's name, shown on the left.</param>
-    /// <param name="hint">A longer description. The game's checkbox row has no place to show it, so it is kept for future use.</param>
+    /// <param name="hint">A short description, shown next to the label (up to two lines).</param>
     /// <returns>This menu, for chaining.</returns>
     /// <exception cref="ArgumentException">The label is empty, or the entry is null or not a <c>bool</c>.</exception>
     public SettingsMenu Toggle(ConfigEntryBase entry, string label, string hint = null) =>
@@ -116,7 +116,7 @@ public sealed class SettingsMenu
     /// <summary>Adds an On / Off row with its texts in several languages; otherwise the same as <see cref="Toggle(ConfigEntryBase, string, string)"/>.</summary>
     /// <param name="entry">A <c>bool</c> config entry; checked means <c>true</c>.</param>
     /// <param name="label">The row's name, per language.</param>
-    /// <param name="hint">A longer description, per language (kept for future use).</param>
+    /// <param name="hint">A short description, per language, shown next to the label (up to two lines).</param>
     /// <returns>This menu, for chaining.</returns>
     /// <exception cref="ArgumentException">The label is empty, or the entry is null or not a <c>bool</c>.</exception>
     public SettingsMenu Toggle(ConfigEntryBase entry, LocalizedText label, LocalizedText hint = null) =>
@@ -136,7 +136,7 @@ public sealed class SettingsMenu
     /// with the value as <c>{0}</c>: <c>"{0:0%}"</c> shows 0.75 as "75%", <c>"{0:0.00}x"</c> as "0.75x",
     /// <c>"{0:0}"</c> as "1".
     /// </param>
-    /// <param name="hint">A longer description. The game's slider row has no place to show it, so it is kept for future use.</param>
+    /// <param name="hint">A short description, shown next to the label (up to two lines).</param>
     /// <returns>This menu, for chaining.</returns>
     /// <exception cref="ArgumentException">The label is empty, the entry is null or not a float / double, or <paramref name="max"/> is not greater than <paramref name="min"/>.</exception>
     public SettingsMenu Slider(ConfigEntryBase entry, string label, float min, float max, float step, string format = "{0:0.##}",
@@ -150,7 +150,7 @@ public sealed class SettingsMenu
     /// <param name="max">The highest value; must be greater than <paramref name="min"/>.</param>
     /// <param name="step">The increment of one Left / Right press; 0 lets the slider move freely.</param>
     /// <param name="format">A <see cref="string.Format(string, object)"/> pattern for the value shown next to the slider, the same in every language.</param>
-    /// <param name="hint">A longer description, per language (kept for future use).</param>
+    /// <param name="hint">A short description, per language, shown next to the label (up to two lines).</param>
     /// <returns>This menu, for chaining.</returns>
     /// <exception cref="ArgumentException">The label is empty, the entry is null or not a float / double, or <paramref name="max"/> is not greater than <paramref name="min"/>.</exception>
     public SettingsMenu Slider(ConfigEntryBase entry, LocalizedText label, float min, float max, float step, string format = "{0:0.##}",
@@ -167,7 +167,7 @@ public sealed class SettingsMenu
     /// <param name="min">The lowest value.</param>
     /// <param name="max">The highest value; must be greater than <paramref name="min"/>.</param>
     /// <param name="step">The increment of one Left / Right press; at least 1.</param>
-    /// <param name="hint">A longer description. The game's slider row has no place to show it, so it is kept for future use.</param>
+    /// <param name="hint">A short description, shown next to the label (up to two lines).</param>
     /// <returns>This menu, for chaining.</returns>
     /// <exception cref="ArgumentException">The label is empty, the entry is null or not a whole-number type, or <paramref name="max"/> is not greater than <paramref name="min"/>.</exception>
     public SettingsMenu IntSlider(ConfigEntryBase entry, string label, int min, int max, int step = 1, string hint = null) =>
@@ -179,7 +179,7 @@ public sealed class SettingsMenu
     /// <param name="min">The lowest value.</param>
     /// <param name="max">The highest value; must be greater than <paramref name="min"/>.</param>
     /// <param name="step">The increment of one Left / Right press; at least 1.</param>
-    /// <param name="hint">A longer description, per language (kept for future use).</param>
+    /// <param name="hint">A short description, per language, shown next to the label (up to two lines).</param>
     /// <returns>This menu, for chaining.</returns>
     /// <exception cref="ArgumentException">The label is empty, the entry is null or not a whole-number type, or <paramref name="max"/> is not greater than <paramref name="min"/>.</exception>
     public SettingsMenu IntSlider(ConfigEntryBase entry, LocalizedText label, int min, int max, int step = 1, LocalizedText hint = null) =>
@@ -201,7 +201,7 @@ public sealed class SettingsMenu
     /// What the player sees for each option, one per value in the same order (<c>"Always"</c>,
     /// <c>"While holding the wheel button"</c>). Null shows the values themselves.
     /// </param>
-    /// <param name="hint">A longer description, shown where the game's list row has its description line.</param>
+    /// <param name="hint">A short description, shown next to the label (up to two lines).</param>
     /// <returns>This menu, for chaining.</returns>
     /// <exception cref="ArgumentException">The label is empty, the entry is null or of another type, <paramref name="values"/> is empty or names a missing enum member, or <paramref name="labels"/> has a different length.</exception>
     public SettingsMenu Choice(ConfigEntryBase entry, string label, string[] values, string[] labels = null, string hint = null) =>
@@ -212,7 +212,7 @@ public sealed class SettingsMenu
     /// <param name="label">The row's name, per language.</param>
     /// <param name="values">What the entry holds for each option, in display order. Never translated: they are what the config file stores.</param>
     /// <param name="labels">What the player sees for each option, per language, one per value in the same order. Null shows the values themselves.</param>
-    /// <param name="hint">A longer description, per language, shown where the game's list row has its description line.</param>
+    /// <param name="hint">A short description, per language, shown next to the label (up to two lines).</param>
     /// <returns>This menu, for chaining.</returns>
     /// <exception cref="ArgumentException">The label is empty, the entry is null or of another type, <paramref name="values"/> is empty or names a missing enum member, or <paramref name="labels"/> has a different length.</exception>
     public SettingsMenu Choice(ConfigEntryBase entry, LocalizedText label, string[] values, LocalizedText[] labels = null, LocalizedText hint = null) =>
@@ -230,7 +230,7 @@ public sealed class SettingsMenu
     /// <c>"Q"</c>), plus <c>"Mouse4"</c> and <c>"Mouse5"</c> for the mouse side buttons. The row shows them
     /// as "F3", "1", "Q", "Mouse 4". Offer only keys the game and your mod don't already use there.
     /// </param>
-    /// <param name="hint">A longer description, shown where the game's list row has its description line.</param>
+    /// <param name="hint">A short description, shown next to the label (up to two lines).</param>
     /// <returns>This menu, for chaining.</returns>
     /// <exception cref="ArgumentException">The label is empty, the entry is null or not a string, or <paramref name="keys"/> is empty.</exception>
     public SettingsMenu Key(ConfigEntryBase entry, string label, string[] keys, string hint = null) =>
@@ -240,7 +240,7 @@ public sealed class SettingsMenu
     /// <param name="entry">A <c>string</c> config entry holding the key's name.</param>
     /// <param name="label">The row's name, per language.</param>
     /// <param name="keys">The keys the player can pick from, as Input System <c>Key</c> names. Key names are not translated.</param>
-    /// <param name="hint">A longer description, per language, shown where the game's list row has its description line.</param>
+    /// <param name="hint">A short description, per language, shown next to the label (up to two lines).</param>
     /// <returns>This menu, for chaining.</returns>
     /// <exception cref="ArgumentException">The label is empty, the entry is null or not a string, or <paramref name="keys"/> is empty.</exception>
     public SettingsMenu Key(ConfigEntryBase entry, LocalizedText label, string[] keys, LocalizedText hint = null) =>
@@ -255,7 +255,7 @@ public sealed class SettingsMenu
     /// What pressing it does (A, Enter or a click). It runs at once, on Unity's main thread; the rows
     /// re-read their entries afterwards, so values it changes show immediately.
     /// </param>
-    /// <param name="hint">A longer description, kept for future use.</param>
+    /// <param name="hint">A short description, shown next to the label (up to two lines).</param>
     /// <param name="text">The caption on the button; null uses <paramref name="label"/>.</param>
     /// <returns>This menu, for chaining.</returns>
     /// <remarks>On the title screen, before the pause menu has been opened once, there is no button to copy yet; the row then shows a checkbox and works the same.</remarks>
@@ -266,7 +266,7 @@ public sealed class SettingsMenu
     /// <summary>Adds a button row with its texts in several languages; otherwise the same as <see cref="Button(string, Action, string, string)"/>.</summary>
     /// <param name="label">The row's name, per language.</param>
     /// <param name="onPress">What pressing it does. It runs at once, on Unity's main thread.</param>
-    /// <param name="hint">A longer description, per language (kept for future use).</param>
+    /// <param name="hint">A short description, per language, shown next to the label (up to two lines).</param>
     /// <param name="text">The caption on the button, per language; null uses <paramref name="label"/>.</param>
     /// <returns>This menu, for chaining.</returns>
     /// <exception cref="ArgumentException">The label is empty or <paramref name="onPress"/> is null.</exception>
@@ -274,11 +274,91 @@ public sealed class SettingsMenu
         Add(new SettingRow { Kind = RowKind.Button, LabelText = label, HintText = hint, OnPress = onPress, ButtonLabel = text });
 
     /// <summary>
+    /// Adds a row that binds a button, key or combination: the player selects it, the row says
+    /// "Press a button…", and the next input is stored in the entry in the <see cref="ControlBinding"/>
+    /// format. Holding one control and pressing another stores both (<c>"rightShoulder+leftShoulder"</c>).
+    /// </summary>
+    /// <param name="entry">A <c>string</c> config entry; it holds a <see cref="ControlBinding"/> text (empty means unbound).</param>
+    /// <param name="label">The row's name, shown on the left.</param>
+    /// <param name="options">What the row accepts: devices, combinations, allowed and reserved controls, a check of your own, the timeout. Null accepts any gamepad control or combination.</param>
+    /// <param name="hint">
+    /// A short line shown next to the label. Null shows the library's "Select, then press a button. Hold
+    /// one and press another for a combination." (without the second sentence when combinations are off)
+    /// in the player's language.
+    /// </param>
+    /// <returns>This menu, for chaining.</returns>
+    /// <remarks>
+    /// The binding shows as the game's own button icons for the controller in use (Xbox or PlayStation,
+    /// switching when the player changes controller) and as key names for the keyboard. While the row
+    /// listens, the menu's own buttons do nothing. B, Esc or Backspace cancel and keep the old binding, as on
+    /// the game's Controls screen (so those three are never bound), and so does the timeout. Read the binding in your mod with <see cref="ControlBinding.WasPressedThisFrame"/> or
+    /// <see cref="ControlBinding.IsHeld"/>.
+    /// </remarks>
+    /// <exception cref="ArgumentException">The label is empty, or the entry is null or not a string.</exception>
+    public SettingsMenu Binding(ConfigEntryBase entry, string label, BindingOptions options = null, string hint = null) =>
+        Binding(entry, (LocalizedText)label, options, hint);
+
+    /// <summary>Adds a binding row with its texts in several languages; otherwise the same as <see cref="Binding(ConfigEntryBase, string, BindingOptions, string)"/>.</summary>
+    /// <param name="entry">A <c>string</c> config entry holding a <see cref="ControlBinding"/> text.</param>
+    /// <param name="label">The row's name, per language.</param>
+    /// <param name="options">What the row accepts; null accepts any gamepad control or combination.</param>
+    /// <param name="hint">A short line shown next to the label, per language; null shows the library's.</param>
+    /// <returns>This menu, for chaining.</returns>
+    /// <exception cref="ArgumentException">The label is empty, or the entry is null or not a string.</exception>
+    public SettingsMenu Binding(ConfigEntryBase entry, LocalizedText label, BindingOptions options = null, LocalizedText hint = null) =>
+        Add(new SettingRow
+        {
+            Kind = RowKind.Binding, BindsTo = entry, LabelText = label,
+            HintText = hint ?? (options == null || options.AllowCombinations ? Texts.BindingHint : Texts.BindingHintSingle),
+            Options = options ?? new BindingOptions(), Sound = ButtonSound.None,
+        });
+
+    /// <summary>Adds a title line that groups the rows after it. It has no control and is skipped by Up / Down.</summary>
+    /// <param name="title">The title.</param>
+    /// <returns>This menu, for chaining.</returns>
+    /// <exception cref="ArgumentException">The title is empty.</exception>
+    public SettingsMenu Header(string title) => Header((LocalizedText)title);
+
+    /// <summary>Adds a title line with its text in several languages; otherwise the same as <see cref="Header(string)"/>.</summary>
+    /// <param name="title">The title, per language.</param>
+    /// <returns>This menu, for chaining.</returns>
+    /// <exception cref="ArgumentException">The title is empty.</exception>
+    public SettingsMenu Header(LocalizedText title) =>
+        Add(new SettingRow { Kind = RowKind.Header, LabelText = title });
+
+    /// <summary>
+    /// Shows the row added just before this call only while <paramref name="condition"/> returns true;
+    /// while it returns false the row is hidden, the rows below move up to close the gap and Up / Down
+    /// skip it. Works on every row kind, headers included.
+    /// </summary>
+    /// <param name="condition">
+    /// Checked when the sub-menu opens and again whenever an entry of the config files bound on the
+    /// tab changes (for example when the player flips a toggle of this menu), on Unity's main thread.
+    /// Null shows the row always. If it throws, the row is shown and the error is logged.
+    /// </param>
+    /// <returns>This menu, for chaining.</returns>
+    /// <example>
+    /// <code>
+    /// menu.Toggle(Plugin.MergedWheels, "One button for both wheels");
+    /// menu.Toggle(Plugin.WeaponPage, "Weapon wheel").VisibleWhen(() => !Plugin.MergedWheels.Value);
+    /// menu.Binding(Plugin.WeaponButton, "Weapon button").VisibleWhen(() => !Plugin.MergedWheels.Value);
+    /// </code>
+    /// </example>
+    /// <exception cref="InvalidOperationException">No row was added yet.</exception>
+    public SettingsMenu VisibleWhen(Func<bool> condition)
+    {
+        if (RowList.Count == 0)
+            throw new InvalidOperationException("VisibleWhen applies to the row added before it; add a row first");
+        RowList[RowList.Count - 1].VisibleWhen = condition;
+        return this;
+    }
+
+    /// <summary>
     /// Adds a "Restore defaults" row with a "Reset" button: every entry of this menu goes back to its
     /// default value and is saved (<see cref="ResetAll"/>), with the Settings screen's reset sound.
     /// </summary>
     /// <param name="label">The row's name, shown on the left.</param>
-    /// <param name="hint">A longer description, kept for future use.</param>
+    /// <param name="hint">A short description, shown next to the label (up to two lines).</param>
     /// <param name="text">The caption on the button.</param>
     /// <returns>This menu, for chaining.</returns>
     /// <remarks>
@@ -293,7 +373,7 @@ public sealed class SettingsMenu
 
     /// <summary>Adds the reset row of <see cref="ResetButton(string, string, string)"/> with your own texts in several languages.</summary>
     /// <param name="label">The row's name, per language.</param>
-    /// <param name="hint">A longer description, per language (kept for future use); null uses the library's.</param>
+    /// <param name="hint">A short description, per language, shown next to the label; null uses the library's.</param>
     /// <param name="text">The caption on the button, per language; null uses the library's "Reset".</param>
     /// <returns>This menu, for chaining.</returns>
     /// <exception cref="ArgumentException">The label is empty.</exception>

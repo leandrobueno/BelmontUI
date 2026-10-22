@@ -3,7 +3,7 @@
 		<TargetFramework>net6.0</TargetFramework>
 		<LangVersion>latest</LangVersion>
 		<CheckEolTargetFramework>false</CheckEolTargetFramework>
-		<Version>0.3.0</Version>
+		<Version>0.4.0</Version>
 		<!-- XML docs for IntelliSense: copied next to the dll, so mods referencing it get them. -->
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<Authors>leandrobueno</Authors>

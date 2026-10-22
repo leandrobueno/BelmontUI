@@ -77,7 +77,7 @@ public sealed class LocalizedText : IEnumerable<KeyValuePair<string, string>>
     /// <summary>The plain text given to the constructor (null when none was).</summary>
     public string Text { get; }
 
-    /// <summary>The version for one language, exactly as added (no fallback); null when there is none. Setting it adds or replaces that version, and the tab shows the change on its next refresh.</summary>
+    /// <summary>The version for one language, exactly as added (no fallback); null when there is none. Setting it adds or replaces that version; a text already on the tab shows the change at the next language change or when its menu changes.</summary>
     /// <param name="locale">A locale code such as <c>"fr"</c> or <c>"zh-CN"</c>.</param>
     public string this[string locale]
     {
@@ -154,6 +154,5 @@ public sealed class LocalizedText : IEnumerable<KeyValuePair<string, string>>
             _byLocale.Remove(code);
         else
             _byLocale[code] = text;
-        Settings.Revision++;
     }
 }

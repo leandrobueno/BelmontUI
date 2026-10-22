@@ -6,7 +6,7 @@ nav_order: 3
 # API reference
 {: .no_toc }
 
-Version 0.3.0. Everything is in the `BelmontUi` namespace. The public surface uses plain .NET types only (`ConfigEntryBase`, `ConfigFile`, strings, numbers, `Action`), so it does not change when the game's interop assemblies are regenerated. The dll ships with `BelmontUI.xml`, so your IDE shows these descriptions as tooltips.
+Version 0.4.0. Everything is in the `BelmontUi` namespace. The public surface uses plain .NET types only (`ConfigEntryBase`, `ConfigFile`, strings, numbers, `Action`), so it does not change when the game's interop assemblies are regenerated. The dll ships with `BelmontUI.xml`, so your IDE shows these descriptions as tooltips.
 
 1. TOC
 {:toc}
@@ -16,8 +16,9 @@ Version 0.3.0. Everything is in the `BelmontUi` namespace. The public surface us
 | Type | Public members | For |
 |---|---|---|
 | `Settings` (static) | `Register`, `RegisterFromConfig`, `Get`, `Unregister`, `Language`, `LanguageChanged` | your mod |
-| `SettingsMenu` (sealed, no public constructor) | `Id`, `Title`, `Summary`, `LocalizedTitle`, `LocalizedSummary`, `Toggle`, `Slider`, `IntSlider`, `Choice`, `Key`, `Button`, `ResetButton`, `ResetAll`, `Save` | your mod |
+| `SettingsMenu` (sealed, no public constructor) | `Id`, `Title`, `Summary`, `LocalizedTitle`, `LocalizedSummary`, `Header`, `Binding`, `VisibleWhen`, `Toggle`, `Slider`, `IntSlider`, `Choice`, `Key`, `Button`, `ResetButton`, `ResetAll`, `Save` | your mod |
 | `LocalizedText` (sealed) | constructors, indexer, `Add`, `Resolve`, `Current`, `Text`, `Locales`, `IsEmpty`, conversions from `string` and `Dictionary<string, string>` | your mod (see Translations) |
+| `ControlBinding` (static), `BindingOptions`, `BindingDevices` | the binding format and helpers; what a binding row accepts | your mod |
 | `BelmontUiPlugin` | `Guid`, `Version`, `Load` | BepInEx |
 | `BelmontUiWatcher` | a Unity component | BelmontUI itself; don't add or call it |
 
@@ -100,7 +101,7 @@ Rows can't be removed one by one. To change a menu's rows, register the GUID aga
 SettingsMenu Toggle(ConfigEntryBase entry, string label, string hint = null)
 ```
 
-The game's checkbox row. `entry` must be a `bool`; checked means `true`. The checkbox row has no place to show `hint`; it is kept for future use.
+The game's checkbox row. `entry` must be a `bool`; checked means `true`. `hint` is shown next to the label.
 
 ```csharp
 menu.Toggle(Plugin.ShowHud, "Show HUD");
@@ -120,7 +121,7 @@ The game's slider row, with the value written next to it. `entry` must be a `flo
 | `min`, `max` | The range. `max` must be greater than `min`. |
 | `step` | The increment of one Left / Right press, and the grid values are snapped to from `min`, so the file gets 0.75 and not 0.7500001. 0 lets the slider move freely. |
 | `format` | A `string.Format` pattern with the value as `{0}`. `"{0:0%}"` shows 0.75 as "75%", `"{0:0.00}x"` as "0.75x", `"{0:0}"` as "1". |
-| `hint` | Not shown by the slider row; kept for future use. |
+| `hint` | Shown next to the label. |
 
 ```csharp
 menu.Slider(Plugin.Opacity, "Opacity", 0.2f, 1f, 0.05f, "{0:0%}");
@@ -152,7 +153,7 @@ The game's list row: the current option between Left / Right arrows. `entry` mus
 |---|---|
 | `values` | What the entry holds for each option, in display order: the exact strings, or the enum member names. An entry holding something else shows the first option until it is changed. |
 | `labels` | What the player sees for each option, one per value. Null shows the values. |
-| `hint` | Shown on the list row's description line. |
+| `hint` | Shown next to the label. |
 
 ```csharp
 menu.Choice(Plugin.Corner, "Position",
@@ -167,7 +168,7 @@ menu.Choice(Plugin.Corner, "Position",
 SettingsMenu Key(ConfigEntryBase entry, string label, string[] keys, string hint = null)
 ```
 
-A list row whose options are keys. `entry` must be a `string` holding an Input System `Key` name. `keys` lists the choices: names such as `"F3"`, `"Digit1"`, `"Q"`, plus `"Mouse4"` and `"Mouse5"` for the mouse side buttons. They are shown as "F3", "1", "Q", "Mouse 4". There is no "press a key" capture; offer only keys the game and your mod don't already use. `hint` is shown on the description line.
+A list row whose options are keys. `entry` must be a `string` holding an Input System `Key` name. `keys` lists the choices: names such as `"F3"`, `"Digit1"`, `"Q"`, plus `"Mouse4"` and `"Mouse5"` for the mouse side buttons. They are shown as "F3", "1", "Q", "Mouse 4". There is no "press a key" capture; offer only keys the game and your mod don't already use. `hint` is shown next to the label.
 
 ```csharp
 menu.Key(Plugin.ToggleKey, "Toggle key", new[] { "F5", "F6", "F7", "F8", "Mouse4" });
@@ -179,7 +180,7 @@ menu.Key(Plugin.ToggleKey, "Toggle key", new[] { "F5", "F6", "F7", "F8", "Mouse4
 SettingsMenu Button(string label, Action onPress, string hint = null, string text = null)
 ```
 
-A row with a button in the game's style: the label on the left, a copy of the pause menu's System-tab button where other rows have their control. `onPress` runs at once on Unity's main thread when the row is pressed (A, Enter or a click). The rows re-read their entries afterwards, so values it changed show immediately. An exception from `onPress` is caught and logged as `[ui] <guid>: '<label>' failed: ...`. `text` is the caption on the button and defaults to the label. `hint` is kept for future use.
+A row with a button in the game's style: the label on the left, a copy of the pause menu's System-tab button where other rows have their control. `onPress` runs at once on Unity's main thread when the row is pressed (A, Enter or a click). The rows re-read their entries afterwards, so values it changed show immediately. An exception from `onPress` is caught and logged as `[ui] <guid>: '<label>' failed: ...`. `text` is the caption on the button and defaults to the label. `hint` is shown next to the label.
 
 On the title screen, before the pause menu has been opened once, there is no button to copy yet; the row shows a checkbox there and works the same.
 
@@ -195,6 +196,81 @@ SettingsMenu ResetButton(string label = "Restore defaults",
 ```
 
 A button row that calls `ResetAll()`, with the Settings screen's reset sound.
+
+### Binding
+
+```csharp
+SettingsMenu Binding(ConfigEntryBase entry, string label, BindingOptions options = null, string hint = null)
+SettingsMenu Binding(ConfigEntryBase entry, LocalizedText label, BindingOptions options = null, LocalizedText hint = null)
+```
+
+A row where the player picks a button, key or combination by pressing it. `entry` must be a `string`; it holds a `ControlBinding` text. The row shows the binding as the game's own button icons for the controller in use (`<sprite name="xbox_buttonSouth">` and the like, from the game's TMP sprite assets; PlayStation, Switch and Xbox sets are chosen the way the game chooses its prompts and switch when the player changes controller), and key names for the keyboard. `hint` is a short line next to the label; null shows the library's "Select, then press a button. Hold one and press another for a combination."
+
+Selecting the row (A, Enter or a click) shows "Press new button" (the game's own text) and listens:
+
+- A single press and release stores that control. Holding one control and pressing another stores both, held first: `rightShoulder+leftShoulder`. Both controls must be on the same kind of device.
+- B, Esc or Backspace cancel, as on the game's Controls screen (so those three are never bound), and so does `TimeoutSeconds` without input; the old binding stays.
+- A control outside `Allowed` or in `Reserved` shows `ReservedReason` ("Already assigned" by default, the game's own text) on the row's line; a `Validate` callback that returns a reason does the same. The row keeps listening.
+- While the row listens, and until everything is let go, every input action the game has on is switched off, so the press doesn't also navigate, switch tabs or close the menu.
+
+`BindingOptions`:
+
+| Property | Default | |
+|---|---|---|
+| `Devices` | `Gamepad` | `Gamepad`, `Keyboard` (keys and Mouse4 / Mouse5) or `Both`. |
+| `AllowCombinations` | `true` | Whether hold + press stores a combination. |
+| `Allowed` | null (all) | The only controls the player may pick. |
+| `Reserved` | null | Controls the player may not pick. |
+| `ReservedReason` | "Already assigned" | Shown when a control is refused. |
+| `Validate` | null | `Func<string, LocalizedText>`: null accepts the binding, a text refuses it with that reason. |
+| `TimeoutSeconds` | 10 | Listening stops after this long without input. |
+
+```csharp
+menu.Binding(Plugin.WheelButton, new LocalizedText("Wheel button") { ["fr"] = "Bouton de la roue" },
+    new BindingOptions { Devices = BindingDevices.Gamepad, Reserved = new[] { "start" } });
+```
+
+### Header
+
+```csharp
+SettingsMenu Header(string title)
+SettingsMenu Header(LocalizedText title)
+```
+
+A title line that groups the rows after it. It has no control and Up / Down skip it.
+
+### VisibleWhen
+
+```csharp
+SettingsMenu VisibleWhen(Func<bool> condition)
+```
+
+Applies to the row added just before the call (any kind, headers included): the row is shown only while `condition` returns true. The condition is checked when the sub-menu opens and again whenever an entry of a config file bound on the tab changes, for example when the player flips a toggle of the same menu. Hidden rows take no space and Up / Down skip them; if the selected row is hidden, the selection moves to the nearest row still shown. A condition that throws shows the row and logs the error. Calling it before any row was added throws `InvalidOperationException`.
+
+```csharp
+menu.Toggle(Plugin.MergedWheels, "One button for both wheels");
+menu.Binding(Plugin.WeaponButton, "Weapon button").VisibleWhen(() => !Plugin.MergedWheels.Value);
+```
+
+## `ControlBinding` (static class)
+
+The text format of a binding and helpers to use it in your mod. A binding is one control, or two joined with `+` (held first). Gamepad controls are Input System control names on `Gamepad` (`buttonNorth`, `buttonSouth`, `buttonWest`, `buttonEast`, `leftShoulder`, `rightShoulder`, `leftTrigger`, `rightTrigger`, `leftStickPress`, `rightStickPress`, `select`, `start`, `dpad/up`, `dpad/down`, `dpad/left`, `dpad/right`); keyboard controls are Input System `Key` names plus `Mouse4` / `Mouse5`. Empty means unbound.
+
+| Member | |
+|---|---|
+| `Separator`, `GamepadControls`, `MouseControls` | `"+"` and the control names. |
+| `Parse(binding)`, `Make(held, pressed)` | Split into controls; join. |
+| `IsGamepad(control)`, `IsKeyboard(control)`, `IsValid(binding)` | Checks. |
+| `IsHeld(binding)` | Every control held now. |
+| `WasPressedThisFrame(binding)` | The last control pressed this frame, the first one (if any) held. |
+| `Describe(binding)` | Plain text ("RB + LB", "R1 + L1", "F3", "-" when unbound). |
+| `Display(binding)` | TMP rich text with the game's icons, for your own labels. |
+
+The input methods read the devices directly (Gamepad.current, Keyboard.current, Mouse.current), whatever the game's input actions are doing. Call them on Unity's main thread.
+
+## Descriptions
+
+A row's `hint` (and a mod's summary on the list) is shown between the label and the control: in a column that starts just after the longest label of the page, the same on every row, up to two lines, centred on the label. The font is 68 % of the label's, down to 52 % when needed to fit two lines; longer texts end with "...". A row whose description takes two lines grows by one line plus a little padding above and below (its dark strip, label, control and selection ornaments stay centred); one-line rows keep the game's height. Keep hints to about one short sentence.
 
 ## Validation errors
 
@@ -215,6 +291,7 @@ Every builder method checks its row at once and throws `ArgumentException` namin
 | `Row 'X' (Choice) needs a string or enum entry; 'Key' holds Single` | Wrong entry type for a list. |
 | `Row 'X' (Key) needs Keys, at least one key name` | Empty key list. |
 | `Row 'X' (Key) needs a string entry; 'Key' holds Int32` | Wrong entry type for a key. |
+| `Row 'X' (Binding) needs a string entry; 'Key' holds Int32` | Wrong entry type for a binding. |
 
 ## Translations
 
@@ -244,4 +321,4 @@ A control writes its `ConfigEntry` the moment it changes, so your mod's `Setting
 
 ## `BelmontUiPlugin`
 
-The plugin class. `BelmontUiPlugin.Guid` is `"leandrobueno.belmontui"` and `BelmontUiPlugin.Version` is `"0.3.0"`. Copy the GUID string into a constant of your own instead, as the examples do. That keeps every `BelmontUi.*` reference out of your plugin class.
+The plugin class. `BelmontUiPlugin.Guid` is `"leandrobueno.belmontui"` and `BelmontUiPlugin.Version` is `"0.4.0"`. Copy the GUID string into a constant of your own instead, as the examples do. That keeps every `BelmontUi.*` reference out of your plugin class.

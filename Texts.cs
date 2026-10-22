@@ -100,6 +100,66 @@ internal static class Texts
         ["zh-TW"] = "沒有模組提供設定。",
     };
 
+    // UI_Settings/Settings_Control_KeyBindingNew: a binding row while it listens.
+    internal static readonly LocalizedText PressButton = new("Press new button")
+    {
+        ["de"] = "Neue Taste drücken",
+        ["es"] = "Pulsa cualquier botón",
+        ["fr"] = "Choisir une autre touche",
+        ["it"] = "Premi nuovo tasto",
+        ["ja"] = "新しいボタンを入力してください",
+        ["ko"] = "새롭게 지정할 버튼을 입력해 주세요",
+        ["pt-BR"] = "Pressione o novo botão",
+        ["ru"] = "Нажмите другую кнопку",
+        ["zh-CN"] = "请输入新的按键。",
+        ["zh-TW"] = "請輸入新的配置",
+    };
+
+    // UI_Settings/Settings_Control_KeyBindingUsed: a binding row's default reason for a reserved control.
+    internal static readonly LocalizedText AlreadyAssigned = new("Already assigned")
+    {
+        ["de"] = "Wird bereits verwendet",
+        ["es"] = "Asignación ya en uso",
+        ["fr"] = "Déjà utilisée",
+        ["it"] = "Già in uso",
+        ["ja"] = "重複しています",
+        ["ko"] = "중복된 항목입니다",
+        ["pt-BR"] = "Atribuição feita",
+        ["ru"] = "Уже привязано",
+        ["zh-CN"] = "已被占用。",
+        ["zh-TW"] = "已重複",
+    };
+
+    // Written for BelmontUI: a binding row's default hint.
+    internal static readonly LocalizedText BindingHint = new("Select, then press a button. Hold one and press another for a combination.")
+    {
+        ["de"] = "Auswählen, dann eine Taste drücken. Für eine Kombination eine Taste halten und eine weitere drücken.",
+        ["es"] = "Selecciona y pulsa un botón. Para una combinación, mantén uno y pulsa otro.",
+        ["fr"] = "Sélectionnez, puis appuyez sur une touche. Pour une combinaison, maintenez-en une et appuyez sur une autre.",
+        ["it"] = "Seleziona, poi premi un tasto. Per una combinazione, tieni premuto un tasto e premine un altro.",
+        ["ja"] = "選択してボタンを押してください。組み合わせは、ボタンを押したまま別のボタンを押します。",
+        ["ko"] = "선택한 후 버튼을 누르세요. 조합은 버튼 하나를 누른 채 다른 버튼을 누르세요.",
+        ["pt-BR"] = "Selecione e pressione um botão. Para uma combinação, segure um e pressione outro.",
+        ["ru"] = "Выберите и нажмите кнопку. Для сочетания удерживайте одну и нажмите другую.",
+        ["zh-CN"] = "选中后按下按键。组合键：按住一个键再按另一个键。",
+        ["zh-TW"] = "選擇後按下按鍵。組合鍵：按住一個鍵再按另一個鍵。",
+    };
+
+    // Written for BelmontUI: the default hint of a binding row without combinations.
+    internal static readonly LocalizedText BindingHintSingle = new("Select, then press a button.")
+    {
+        ["de"] = "Auswählen, dann eine Taste drücken.",
+        ["es"] = "Selecciona y pulsa un botón.",
+        ["fr"] = "Sélectionnez, puis appuyez sur une touche.",
+        ["it"] = "Seleziona, poi premi un tasto.",
+        ["ja"] = "選択してボタンを押してください。",
+        ["ko"] = "선택한 후 버튼을 누르세요.",
+        ["pt-BR"] = "Selecione e pressione um botão.",
+        ["ru"] = "Выберите и нажмите кнопку.",
+        ["zh-CN"] = "选中后按下按键。",
+        ["zh-TW"] = "選擇後按下按鍵。",
+    };
+
     // Written for BelmontUI: the two options of an On / Off row shown as a list row (only when
     // the Settings screen has no checkbox row to copy).
     internal static readonly LocalizedText Off = new("Off")

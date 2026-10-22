@@ -27,6 +27,12 @@ Open `BepInEx\LogOutput.log` in the game folder after starting the game. Lines f
 | `[ui] MODS tab not added: no Settings screen in this scene to copy rows from` | This scene has no Settings screen to copy rows from yet. |
 | `[ui] <guid>: row '<label>' not added: ...` | One row failed; the others still show. |
 | `[ui] <guid>: '<label>' failed: ...` | A button's action threw. |
+| `[ui] <guid>: '<label>' listening (...)` | A binding row is waiting for a press. |
+| `[ui] <guid>: '<label>' bound: '<binding>'` / `cancelled` / `no input in time` | How the listening ended. |
+| `[ui] <guid>: '<label>' refused '<binding>': <reason>` | A reserved, not allowed or `Validate`-refused control; the row listens again. |
+| `[ui] binding rows: controller icons now '<prefix>'` | The controller changed (`xbox_`, `ps5_`, `ps4_`, `switch_`); binding rows were redrawn. |
+| `[ui] '<title>': <n> row(s) shown or hidden by their conditions` | `VisibleWhen` conditions changed after a setting changed. |
+| `[ui] descriptions: <n> row(s) resized for two-line descriptions` | Rows grew (or went back) to fit their descriptions. |
 | `[ui] <guid>: save failed: ...` | Writing a config file failed. |
 | `[ui] watcher failed: ...` | An unexpected error in the polling loop. Please report it. |
 
@@ -54,10 +60,22 @@ The log shows `FileNotFoundException: Could not load file or assembly 'BelmontUI
 
 Look for the `back actions are off` line. If it is missing or the list is empty, the game's back action has a name BelmontUI doesn't recognise (it looks for Close, Cancel or Back). Use the **Back** row meanwhile and report the line with your game version.
 
+## Binding rows
+
+- **PlayStation controller, Xbox icons.** With Steam Input on for the game, Steam hands the game a virtual Xbox controller, so the game's own prompts and BelmontUI's icons are Xbox. Turn Steam Input off for the game (Steam > the game's Properties > Controller) to get PlayStation icons. The binding itself is the same either way: control names don't depend on the controller.
+- **The row stopped listening by itself.** Listening ends after `TimeoutSeconds` (10 by default) without input, and the old binding stays. Select the row again.
+- **The gamepad's B (Circle), Esc and Backspace can't be bound.** They cancel, as on the game's Controls screen. A mod that wants one of them must set it in its `.cfg` file or as the entry's default.
+- **A control is refused.** The row's line shows why: the mod reserved it, left it out of its allowed list, or its check refused it. The log has the `refused` line.
+- **The menu doesn't react right after binding.** The menu gets its input back once the pressed controls are let go, or after 2 seconds.
+
 ## A setting doesn't stick
 
 - Values apply at once but are written to disk when you leave the sub-menu or close the menu. Quitting the game from inside the sub-menu by other means may skip the save.
 - A Choice row whose entry holds a value not in its list shows the first option. Check that the values you pass match what `Config.Bind` stores.
+
+## A description is cut or a row looks tall
+
+Descriptions take up to two lines; a row whose description wraps grows a little, and longer texts shrink a little and then end with "...". Shorten the hint, in every language the mod provides.
 
 ## Compatibility
 

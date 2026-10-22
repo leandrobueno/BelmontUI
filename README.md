@@ -59,6 +59,40 @@ BelmontUi.Settings.RegisterFromConfig(Plugin.Guid, "Smooth Cutscenes", Config, s
 
 Rows come from the config file's own metadata: `bool` entries become toggles, numbers with an `AcceptableValueRange` sliders, strings with an `AcceptableValueList` and enums list rows, labels from the keys (`HudOpacity` becomes "Hud opacity") and hints from the descriptions. Entries that don't fit (free text, numbers without a range) are left out and logged at debug level. A "Restore defaults" row is added unless the optional `extra` callback adds a button of its own.
 
+### Binding rows
+
+`Binding` lets the player pick a button, key or combination by pressing it, like the game's own Controls screen. The row shows the current binding as the game's own button icons for the controller in use (Xbox or PlayStation, chosen like the game's prompts and switching when the player changes controller), key names for the keyboard, and a short hint next to its name.
+
+```csharp
+internal static ConfigEntry<string> WheelButton;   // Config.Bind("Controls", "WheelButton", "rightShoulder", ...)
+
+menu.Header("Controls");
+menu.Binding(Plugin.WheelButton, "Wheel button", new BindingOptions
+{
+    Devices = BindingDevices.Gamepad,          // or Keyboard, or Both
+    Reserved = new[] { "start", "select" },    // refused with "Already assigned"
+    Validate = b => b.Contains("buttonSouth") ? new LocalizedText("A is jump") : null,
+});
+
+// In the mod: read the stored binding with the same format.
+if (ControlBinding.WasPressedThisFrame(Plugin.WheelButton.Value)) { ... }
+```
+
+- Select the row (A, Enter or a click): it shows "Press new button" (the game's own text) and listens. A single press and release stores that control; holding one and pressing another stores both as a combination. B, Esc or Backspace cancel and keep the old binding, as on the game's Controls screen (so those three can't be bound), and so does the timeout (10 s without input). While the row listens, the menu's own buttons do nothing.
+- Stored format (`ControlBinding`): gamepad controls are Input System control names (`buttonSouth`, `leftShoulder`, `rightTrigger`, `leftStickPress`, `select`, `start`, `dpad/up`, ...); keys are Input System `Key` names (`Digit1`, `F3`) plus `Mouse4` / `Mouse5`; a combination is `held+pressed` (`rightShoulder+leftShoulder`); empty means unbound.
+- `BindingOptions`: `Devices`, `AllowCombinations` (default true), `Allowed` and `Reserved` control lists, `ReservedReason`, `Validate` (return null to accept, or the reason shown on the row; the row keeps listening), `TimeoutSeconds`.
+- `ControlBinding` also has `Parse`, `Make`, `IsValid`, `IsHeld`, `WasPressedThisFrame`, `Describe` (plain text) and `Display` (TMP rich text with the game's icons).
+- `Header(title)` adds a title line that groups the rows after it.
+
+### Rows shown on a condition
+
+`VisibleWhen(condition)` after any builder call shows that row only while the condition is true. It is checked when the sub-menu opens and whenever a setting of the page changes, so a toggle can hide the rows it makes pointless; the rows below close the gap and Up / Down skip hidden rows. If the selected row disappears, the selection moves to the nearest row still shown.
+
+```csharp
+menu.Toggle(Plugin.MergedWheels, "One button for both wheels");
+menu.Toggle(Plugin.WeaponPage, "Weapon wheel").VisibleWhen(() => !Plugin.MergedWheels.Value);
+```
+
 ### Translations
 
 The tab caption is **MODS** in every language. BelmontUI's own texts (Settings, Back, the reset row, the empty-list line) come in all eleven of the game's languages and follow the game's language, also when the player changes it while the game runs. Where the game has the same term, the text is the game's own (Back, Settings, the Default settings dialog's title and button).
@@ -124,6 +158,9 @@ Every method that takes a title, summary, label, hint, caption or option names h
 | `Choice(entry, label, values, labels, hint)` | A string or enum entry on the game's list row; `values` are what the entry holds (strings, or enum member names), `labels` what the player sees for each (default: the values). |
 | `Key(entry, label, keys, hint)` | A string entry holding an Input System `Key` name, as a list of keys. |
 | `Button(label, Action onPress, hint, text)` | A row with a button in the game's style. |
+| `Binding(entry, label, BindingOptions options, hint)` | A string entry holding a button, key or combination the player picks by pressing it, shown with the game's controller icons (see Binding rows). |
+| `Header(title)` | A title line grouping the rows after it. |
+| `VisibleWhen(Func<bool> condition)` | The row added just before is shown only while the condition holds (checked on open and on every setting change). |
 | `ResetButton(label, hint, text)` | "Restore defaults" with a "Reset" button; plays the Settings screen's reset sound. |
 | `ResetAll()`, `Save()` | Every entry of the menu back to its default and saved; save now. |
 
@@ -153,6 +190,8 @@ Every lookup is by component type, not by object name, and any failure logs `[ui
 Needs the .NET SDK and the game with BepInEx 6 (IL2CPP, be.788) installed and started once, so the interop assemblies exist. `dotnet build -c Release` builds the library and copies `BelmontUI.dll` and `BelmontUI.xml` into the game's `BepInEx/plugins/BelmontUI`. If the game isn't in the default Steam folder, add `-p:GameDir="<game folder>"`. Consumers reference `BepInEx/plugins/BelmontUI/BelmontUI.dll` from there, so build this project first.
 
 ## Changelog
+
+- **0.4.0**: binding rows (`Binding`, `BindingOptions`, `ControlBinding`): the player presses a button, key or combination to bind it, shown with the game's own Xbox / PlayStation icons; section headers (`Header`). Texts in all eleven languages. 0.3 mods keep working unchanged.
 
 - **0.3.0**: the tab is called **MODS** (untranslated) on the pause menu and the title screen. BelmontUI's own texts are translated into the game's eleven languages, reusing the game's own terms where they exist, and follow a language change while the game runs. New `LocalizedText` type and overloads for per-language titles, summaries, labels, hints, captions and option names; `Settings.Language` and `Settings.LanguageChanged`. 0.2.x mods keep working unchanged, and their default reset row is translated too. Fixed: rows on the pause menu are centred like the game's settings rows (they sat at the left edge); slider values showed their minimum until first moved.
 

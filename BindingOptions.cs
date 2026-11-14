@@ -7,7 +7,7 @@ namespace BelmontUi;
 [Flags]
 public enum BindingDevices
 {
-    /// <summary>Gamepad buttons, triggers, stick presses and the d-pad.</summary>
+    /// <summary>Gamepad buttons, triggers, stick presses, the d-pad and the right stick's four directions.</summary>
     Gamepad = 1,
 
     /// <summary>Keyboard keys and the mouse side buttons (Mouse4, Mouse5).</summary>
@@ -63,8 +63,14 @@ public sealed class BindingOptions
     public Func<string, LocalizedText> Validate { get; set; }
 
     /// <summary>
-    /// Seconds without any input after which listening stops and the old binding stays (B, Esc and
-    /// Backspace cancel at once). Default: 10.
+    /// Whether the Delete key clears the binding while the row listens, leaving it unbound (an empty
+    /// string, or <c>Key.None</c> for a <c>Key</c> entry). Delete itself can then not be bound. Default: false.
+    /// </summary>
+    public bool AllowUnbind { get; set; }
+
+    /// <summary>
+    /// Seconds without any input after which listening stops and the old binding stays (Esc and
+    /// Backspace cancel at once; so does B, held on a row that can be given B). Default: 10.
     /// </summary>
     public float TimeoutSeconds { get; set; } = 10f;
 }

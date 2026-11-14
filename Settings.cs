@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using BepInEx.Configuration;
+using UnityEngine.InputSystem;
 
 namespace BelmontUi;
 
@@ -192,6 +193,11 @@ public static class Settings
         if (type == typeof(bool))
         {
             page.Toggle(entry, label, hint);
+        }
+        else if (type == typeof(Key))
+        {
+            // One keyboard key, set by pressing it; Delete leaves it unbound (Key.None).
+            page.Binding(entry, label, new BindingOptions { AllowUnbind = true }, hint);
         }
         else if (type.IsEnum)
         {

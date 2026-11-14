@@ -1,4 +1,5 @@
 using BepInEx;
+using BepInEx.Configuration;
 using BepInEx.Logging;
 using BepInEx.Unity.IL2CPP;
 
@@ -21,14 +22,21 @@ public class BelmontUiPlugin : BasePlugin
     public const string Guid = "leandrobueno.belmontui";
 
     /// <summary>The plugin version.</summary>
-    public const string Version = "0.4.0";
+    public const string Version = "0.6.1";
 
     internal static ManualLogSource Logger;
+
+    // The library's only setting of its own; see MinimapBridge.
+    internal static ConfigEntry<bool> HideMinimapTab;
 
     /// <summary>Called by BepInEx when the plugin loads: starts the component that adds the tab.</summary>
     public override void Load()
     {
         Logger = Log;
+        HideMinimapTab = Config.Bind("Belmont Minimap", "HideModsTab", false,
+            "Only with the Belmont Minimap mod installed. On: that mod's own MODS tab is hidden, and its settings are " +
+            "shown on Belmont UI's MODS tab instead, as a 'Belmont Minimap' page. Pages that other mods put on " +
+            "Belmont Minimap's tab are hidden with it. Read when the game starts.");
         AddComponent<BelmontUiWatcher>();
         Log.LogInfo("Belmont UI loaded");
     }

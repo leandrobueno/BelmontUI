@@ -176,6 +176,10 @@ internal static class ControlGlyphs
         "dpad/down" => "D-pad Down",
         "dpad/left" => "D-pad Left",
         "dpad/right" => "D-pad Right",
+        "rightStick/up" => "Right stick Up",
+        "rightStick/down" => "Right stick Down",
+        "rightStick/left" => "Right stick Left",
+        "rightStick/right" => "Right stick Right",
         _ => control,
     };
 

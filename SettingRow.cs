@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using BepInEx.Configuration;
+using UnityEngine.InputSystem;
 
 namespace BelmontUi;
 
@@ -13,7 +14,7 @@ internal enum RowKind
     Choice,      // a string or enum entry: the game's list row (Left / Right)
     Key,         // a string entry holding an Input System key name, as a list of keys
     Button,      // an action: a row with a button in the game's style
-    Binding,     // a string entry holding a ControlBinding: a button row that captures the next input
+    Binding,     // a string entry holding a ControlBinding, or a Key entry: a button row that captures the next input
     Header,      // a title line that groups the rows after it; no control
 }
 
@@ -146,8 +147,8 @@ internal sealed class SettingRow
                 }
                 break;
             case RowKind.Binding:
-                if (type != typeof(string))
-                    throw new ArgumentException($"{name} needs a string entry; '{BindsTo.Definition.Key}' holds {type.Name}");
+                if (type != typeof(string) && type != typeof(Key))
+                    throw new ArgumentException($"{name} needs a string or Key entry; '{BindsTo.Definition.Key}' holds {type.Name}");
                 break;
             case RowKind.Key:
                 if (Keys == null || Keys.Length == 0)
@@ -178,9 +179,25 @@ internal sealed class SettingRow
 
     internal bool GetBool() => Entry.BoxedValue is bool b && b;
 
-    internal string GetText() => Entry.BoxedValue as string ?? "";
+    // A Key entry (the Input System's enum) holds one keyboard key, None for unbound.
+    internal bool HoldsKey => BindsTo != null && BindsTo.SettingType == typeof(Key);
 
-    internal void SetText(string value) => Entry.BoxedValue = value ?? "";
+    internal string GetText()
+    {
+        if (!HoldsKey)
+            return Entry.BoxedValue as string ?? "";
+        return Entry.BoxedValue is Key key && key != Key.None ? key.ToString() : "";
+    }
+
+    internal void SetText(string value)
+    {
+        if (!HoldsKey)
+            Entry.BoxedValue = value ?? "";
+        else if (string.IsNullOrEmpty(value))
+            Entry.BoxedValue = Key.None;
+        else if (Enum.TryParse(value, out Key key))
+            Entry.BoxedValue = key;
+    }
 
     internal void SetBool(bool value) => Entry.BoxedValue = value;
 

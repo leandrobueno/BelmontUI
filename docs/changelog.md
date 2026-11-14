@@ -9,10 +9,32 @@ Every version from 0.1.0 to 0.2.2 was built on 2026-10-19, 0.3.0 on 2026-10-21; 
 
 | Version | Git commit |
 |---|---|
+| 0.6.1 | not committed yet |
+| 0.6.0 | not committed yet |
+| 0.5.0 | not committed yet |
 | 0.4.0 | d092b2b |
 | 0.3.0 | `887f461`, `53497ab` (row alignment) |
 | 0.2.2 | `0d1b056` (includes 0.2.0 and 0.2.1) |
 | 0.1.9 | `b917e54` (includes 0.1.0 to 0.1.8) |
+
+## 0.6.1
+
+- Fixed: a binding row could never be set to **B** (Circle), because B always cancelled. On a row that accepts B (a gamepad row whose `Allowed` has `buttonEast`, or has no `Allowed`, and whose `Reserved` doesn't list it), a tap of B is now the new button and holding B for 0.6 s cancels; the row's line reads "Press new button   Hold B to cancel", with the controller's own icon. Rows that don't accept B are unchanged: B cancels at once. Esc, Backspace and the timeout cancel as before.
+- A mod whose gamepad row has no `Allowed` list can now be given B this way. List `buttonEast` in `Reserved` to keep it out.
+- One new text in all eleven languages. Tested in game on 1.1.4 with the Xbox icons: tap B, hold B, another button and back to B. The 0.6 API is unchanged.
+
+## 0.6.0
+
+- **Hide Belmont Minimap's MODS tab** (off by default): with that mod installed, the tab's list gets a **Belmont UI** page with this one option. On, Minimap's own tab is hidden and its settings are shown on BelmontUI's tab as a **Belmont Minimap** page, built from that mod's own menu rows (its labels, hints, ranges and choices). Its settings stay its own: they are the same config entries, which that mod applies and saves itself. The option is read when the game starts. Pages that other mods put on Minimap's tab are hidden with it. Stored in `leandrobueno.belmontui.cfg`, the library's first config file.
+- **Key entries in binding rows**: `Binding` also takes a `UnityEngine.InputSystem.Key` entry (one keyboard key, `Key.None` for unbound), stored when the key is let go. `RegisterFromConfig` shows `Key` entries this way instead of as a list of every key.
+- **`BindingOptions.AllowUnbind`**: Delete clears the binding while the row listens.
+- Fixed: on a long page, a row that was scrolled out of view when the page opened could get its description on top of a long label. Such rows are now placed once they come into view.
+- Tested in game on 1.1.4 with Belmont Minimap 1.1.4. The 0.5 API is unchanged.
+
+## 0.5.0
+
+- **Right stick directions in binding rows**: `rightStick/up`, `rightStick/down`, `rightStick/left` and `rightStick/right` are gamepad controls like the D-pad's. A binding row captures the stick pushed past half way, shows it with the game's own stick icon, and `ControlBinding` reads it (`IsHeld`, `WasPressedThisFrame`). The left stick can't be bound: it moves the menu's selection. Rows that pass `Allowed` are unchanged; rows that allow every control now also take these four.
+- Built and tested on the game's 1.1.4 update. The 0.4 API is unchanged.
 
 ## 0.4.0
 

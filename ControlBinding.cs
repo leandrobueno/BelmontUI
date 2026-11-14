@@ -19,7 +19,9 @@ namespace BelmontUi;
 /// Gamepad controls are Input System control names on <c>Gamepad</c>: <c>buttonNorth</c>,
 /// <c>buttonSouth</c>, <c>buttonWest</c>, <c>buttonEast</c>, <c>leftShoulder</c>, <c>rightShoulder</c>,
 /// <c>leftTrigger</c>, <c>rightTrigger</c>, <c>leftStickPress</c>, <c>rightStickPress</c>, <c>select</c>,
-/// <c>start</c>, <c>dpad/up</c>, <c>dpad/down</c>, <c>dpad/left</c>, <c>dpad/right</c>. Keyboard controls
+/// <c>start</c>, <c>dpad/up</c>, <c>dpad/down</c>, <c>dpad/left</c>, <c>dpad/right</c> and, from 0.5.0, the right
+/// stick pushed in a direction: <c>rightStick/up</c>, <c>rightStick/down</c>, <c>rightStick/left</c>,
+/// <c>rightStick/right</c> (the left stick moves the menu's selection, so it can't be bound). Keyboard controls
 /// are Input System <c>Key</c> names (<c>Digit1</c>, <c>F3</c>, <c>Q</c>), plus <c>Mouse4</c> and
 /// <c>Mouse5</c> for the mouse side buttons (back and forward).
 /// </para>
@@ -37,6 +39,7 @@ public static class ControlBinding
         "leftShoulder", "rightShoulder", "leftTrigger", "rightTrigger",
         "leftStickPress", "rightStickPress", "select", "start",
         "dpad/up", "dpad/down", "dpad/left", "dpad/right",
+        "rightStick/up", "rightStick/down", "rightStick/left", "rightStick/right",
     };
 
     /// <summary>The mouse side buttons, which keyboard bindings can also hold.</summary>

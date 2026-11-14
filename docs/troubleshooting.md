@@ -28,7 +28,7 @@ Open `BepInEx\LogOutput.log` in the game folder after starting the game. Lines f
 | `[ui] <guid>: row '<label>' not added: ...` | One row failed; the others still show. |
 | `[ui] <guid>: '<label>' failed: ...` | A button's action threw. |
 | `[ui] <guid>: '<label>' listening (...)` | A binding row is waiting for a press. |
-| `[ui] <guid>: '<label>' bound: '<binding>'` / `cancelled` / `no input in time` | How the listening ended. |
+| `[ui] <guid>: '<label>' bound: '<binding>'` / `cancelled` / `cancelled (B held)` / `no input in time` | How the listening ended. |
 | `[ui] <guid>: '<label>' refused '<binding>': <reason>` | A reserved, not allowed or `Validate`-refused control; the row listens again. |
 | `[ui] binding rows: controller icons now '<prefix>'` | The controller changed (`xbox_`, `ps5_`, `ps4_`, `switch_`); binding rows were redrawn. |
 | `[ui] '<title>': <n> row(s) shown or hidden by their conditions` | `VisibleWhen` conditions changed after a setting changed. |
@@ -64,7 +64,8 @@ Look for the `back actions are off` line. If it is missing or the list is empty,
 
 - **PlayStation controller, Xbox icons.** With Steam Input on for the game, Steam hands the game a virtual Xbox controller, so the game's own prompts and BelmontUI's icons are Xbox. Turn Steam Input off for the game (Steam > the game's Properties > Controller) to get PlayStation icons. The binding itself is the same either way: control names don't depend on the controller.
 - **The row stopped listening by itself.** Listening ends after `TimeoutSeconds` (10 by default) without input, and the old binding stays. Select the row again.
-- **The gamepad's B (Circle), Esc and Backspace can't be bound.** They cancel, as on the game's Controls screen. A mod that wants one of them must set it in its `.cfg` file or as the entry's default.
+- **Esc and Backspace can't be bound.** They cancel, as on the game's Controls screen. A mod that wants one of them must set it in its `.cfg` file or as the entry's default.
+- **The gamepad's B (Circle)**: from 0.6.1 a tap of B sets it and holding B cancels, on rows that accept B (the row's line says "Hold B to cancel"). On other rows, and in 0.6.0 and older on every row, B cancels.
 - **A control is refused.** The row's line shows why: the mod reserved it, left it out of its allowed list, or its check refused it. The log has the `refused` line.
 - **The menu doesn't react right after binding.** The menu gets its input back once the pressed controls are let go, or after 2 seconds.
 
@@ -81,7 +82,7 @@ Descriptions take up to two lines; a row whose description wraps grows a little,
 
 | With | Status |
 |---|---|
-| Belmont Minimap | Supported. Its MODS tab comes first; BelmontUI's MODS tab follows it. |
+| Belmont Minimap | Supported. Its MODS tab comes first; BelmontUI's MODS tab follows it. From 0.6.0 an option on the tab's Belmont UI page hides Minimap's tab and shows its settings on BelmontUI's tab; the log then has `[ui] Belmont Minimap's MODS tab hidden on '...'`, or a warning saying why its tab stays. |
 | Other mods that add tabs | Supported. BelmontUI's MODS tab moves itself to the end and never reorders other tabs. |
 | Mods without BelmontUI support | Unaffected. |
 | Game updates | May stop the tab from appearing until BelmontUI is updated. The game's menus keep working. |

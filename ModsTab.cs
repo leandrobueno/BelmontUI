@@ -108,6 +108,7 @@ internal sealed class ModsTab
         internal RectTransform SummaryRect;     // list rows: the summary text box
         internal float SummaryCenter;
         internal bool SummaryFitted;
+        internal float SummaryColumn = -1f;   // placed at the page's column, its own label not measured yet
         internal float SummarySizeMax;          // description font sizes, from the label's
         internal float SummarySizeMin;
         internal int ShownFrames;               // frames the row has been on screen in a row
@@ -154,6 +155,10 @@ internal sealed class ModsTab
     private BoundRow _capture;
     private bool _captureArmed;          // every control was up since listening started
     private string _captureHeld;         // the first control pressed, while it is held
+    private float _captureHeldAt;
+    // On a row that can hold B itself, a tap of B is the new button and holding it this long cancels.
+    private const float CancelHoldSeconds = 0.6f;
+    private const string East = "buttonEast";
     private float _captureLastInput;
     private bool _captureWaitRelease;    // after listening: the menu stays blocked until every control is up
     private float _captureEndedAt;
@@ -344,6 +349,7 @@ internal sealed class ModsTab
     // array), in line with the native toggles, rows up to date and settled.
     internal void Tick()
     {
+        MinimapBridge.Apply(_host);
         EnsureRegistered(first: false);
         if (_builtRevision != Settings.Revision)
             Rebuild();
@@ -425,6 +431,7 @@ internal sealed class ModsTab
         if (bound.SummaryText != null && bound.Opens == null && bound != _capture)
             bound.SummaryText.text = row.Hint ?? "";
         bound.SummaryFitted = false;
+        bound.SummaryColumn = -1f;
         if (bound.Stepper != null)
         {
             FillOptions(bound.Stepper, row.Kind == RowKind.Toggle || row.IsAction
@@ -2271,11 +2278,13 @@ internal sealed class ModsTab
     // The column for the descriptions of the rows on screen (the list, or the open sub-menu): just
     // after the longest label, the same on every row. Labels are measured from their rendered text
     // once the rows have been drawn for a couple of frames (measured earlier, a label came out
-    // several times too wide).
+    // several times too wide). A row scrolled out of the band is scaled to zero and can't be
+    // measured: it goes to the page's column for now, and is placed for good, after its own label
+    // if that is longer, once it has been scrolled into view.
     private void FitSummaries()
     {
         List<BoundRow> shown = null;
-        bool pending = false;
+        bool fresh = false, late = false;
         foreach (var bound in _rows)
         {
             if (bound.Object == null || !bound.Object.activeInHierarchy)
@@ -2286,32 +2295,31 @@ internal sealed class ModsTab
             }
             bound.ShownFrames++;
             (shown ??= new List<BoundRow>()).Add(bound);
-            if (bound.SummaryRect != null && !bound.SummaryFitted)
-                pending = true;
+            if (bound.SummaryRect == null || bound.SummaryFitted)
+                continue;
+            if (bound.SummaryColumn < 0f)
+                fresh = true;
+            else if (Measurable(bound) && bound.ShownFrames >= 3)
+                late = true;
         }
-        if (!pending || shown.Any(b => b.ShownFrames < 3))
+        if (!fresh && !late)
+            return;
+        if (fresh && shown.Any(b => b.ShownFrames < 3))
             return;
         try
         {
-            float longest = 0f, rowWidth = 0f;
-            string longestLabel = null;
-            var ends = new Dictionary<BoundRow, float>();
-            foreach (var bound in shown)
+            _rowsResized = 0;
+            float rowWidth = 0f;
+            if (fresh)
             {
-                var label = bound.LabelText;
-                // Rows scrolled out of the band are scaled to zero and can't be measured.
-                if (label == null || bound.Object.transform.localScale.x < 0.01f)
-                    continue;
-                label.ForceMeshUpdate();
-                var bounds = label.textBounds;
-                var rowRect = bound.Object.transform.TryCast<RectTransform>();
-                rowWidth = rowRect.rect.width;
-                if (rowWidth <= 1f || bounds.size.x <= 1f)
-                    continue;
-                float nameEnd = rowRect.InverseTransformPoint(label.rectTransform.TransformPoint(new Vector3(bounds.max.x, 0f, 0f))).x;
-                float end = (nameEnd - rowRect.rect.xMin) / rowWidth;
-                if (end < 0.6f)
+                float longest = 0f;
+                string longestLabel = null;
+                var ends = new Dictionary<BoundRow, float>();
+                foreach (var bound in shown)
                 {
+                    if (!MeasureLabel(bound, out float end, out float width))
+                        continue;
+                    rowWidth = width;
                     ends[bound] = end;
                     if (end > longest)
                     {
@@ -2319,18 +2327,30 @@ internal sealed class ModsTab
                         longestLabel = bound.Row.Label;
                     }
                 }
+                // One column for the page, but no further in than ColumnLimit: a row whose label is
+                // longer starts its description just after its own label.
+                float column = Mathf.Min(longest > 0f ? longest : 0.25f, ColumnLimit) + ColumnGap;
+                foreach (var bound in shown)
+                {
+                    if (bound.SummaryRect == null)
+                        continue;
+                    PlaceSummary(bound, ends.TryGetValue(bound, out var own) ? Mathf.Max(column, own + ColumnGap) : column);
+                    bound.SummaryFitted = Measurable(bound);
+                    bound.SummaryColumn = column;
+                }
+                BelmontUiPlugin.Logger.LogInfo(
+                    $"[ui] descriptions: longest label '{longestLabel}' ends at {longest:0.###} of a {rowWidth:0}-unit row, column from {column:0.###}");
             }
-            // One column for the page, but no further in than ColumnLimit: a row whose label is
-            // longer starts its description just after its own label.
-            float column = Mathf.Min(longest > 0f ? longest : 0.25f, ColumnLimit) + ColumnGap;
-            _rowsResized = 0;
-            foreach (var bound in shown)
+            else
             {
-                if (bound.SummaryRect == null)
-                    continue;
-                float start = ends.TryGetValue(bound, out var own) ? Mathf.Max(column, own + ColumnGap) : column;
-                PlaceSummary(bound, start);
-                bound.SummaryFitted = true;
+                foreach (var bound in shown)
+                {
+                    if (bound.SummaryRect == null || bound.SummaryFitted || bound.SummaryColumn < 0f || !Measurable(bound) || bound.ShownFrames < 3)
+                        continue;
+                    if (MeasureLabel(bound, out float own, out _) && own + ColumnGap > bound.SummaryColumn)
+                        PlaceSummary(bound, own + ColumnGap);
+                    bound.SummaryFitted = true;
+                }
             }
             if (_rowsResized > 0)
             {
@@ -2345,13 +2365,32 @@ internal sealed class ModsTab
                 }
                 BelmontUiPlugin.Logger.LogInfo($"[ui] descriptions: {_rowsResized} row(s) resized for two-line descriptions");
             }
-            BelmontUiPlugin.Logger.LogInfo(
-                $"[ui] descriptions: longest label '{longestLabel}' ends at {longest:0.###} of a {rowWidth:0}-unit row, column from {column:0.###}");
         }
         catch (Exception e)
         {
             BelmontUiPlugin.Logger.LogDebug($"[ui] descriptions not placed: {e.Message}");
         }
+    }
+
+    private static bool Measurable(BoundRow bound) =>
+        bound.Object != null && bound.Object.transform.localScale.x >= 0.01f;
+
+    // Where the row's label ends, as a part of the row's width; false when it can't be told.
+    private static bool MeasureLabel(BoundRow bound, out float end, out float rowWidth)
+    {
+        end = rowWidth = 0f;
+        var label = bound.LabelText;
+        if (label == null || !Measurable(bound))
+            return false;
+        label.ForceMeshUpdate();
+        var bounds = label.textBounds;
+        var rowRect = bound.Object.transform.TryCast<RectTransform>();
+        rowWidth = rowRect.rect.width;
+        if (rowWidth <= 1f || bounds.size.x <= 1f)
+            return false;
+        float nameEnd = rowRect.InverseTransformPoint(label.rectTransform.TransformPoint(new Vector3(bounds.max.x, 0f, 0f))).x;
+        end = (nameEnd - rowRect.rect.xMin) / rowWidth;
+        return end < 0.6f;
     }
 
     // Shows the rows of the current mode, retitles the page, rebuilds navigation and scroll.
@@ -2619,13 +2658,20 @@ internal sealed class ModsTab
             }
             return;
         }
-        // Cancel as on the game's Controls screen (its UI/Close action): B, Esc or Backspace.
+        // Cancel as on the game's Controls screen (its UI/Close action): B, Esc or Backspace. A row
+        // that can hold B itself takes a tap of B as its new button, and cancels when B is held.
         var keyboard = Keyboard.current;
         var pad = Gamepad.current;
+        bool eastBinds = EastBinds(options);
         if ((keyboard != null && (keyboard.escapeKey.wasPressedThisFrame || keyboard.backspaceKey.wasPressedThisFrame)) ||
-            (pad != null && pad.buttonEast.wasPressedThisFrame))
+            (!eastBinds && pad != null && pad.buttonEast.wasPressedThisFrame))
         {
             EndCapture(null, "cancelled");
+            return;
+        }
+        if (_captureHeld == East && now - _captureHeldAt >= CancelHoldSeconds && pad != null && pad.buttonEast.isPressed)
+        {
+            EndCapture(null, "cancelled (B held)");
             return;
         }
         if (_captureHeld == null && now - _captureLastInput > Math.Max(1f, options.TimeoutSeconds))
@@ -2633,17 +2679,30 @@ internal sealed class ModsTab
             EndCapture(null, "no input in time");
             return;
         }
+        if (options.AllowUnbind && _captureHeld == null && keyboard != null && keyboard.deleteKey.wasPressedThisFrame)
+        {
+            _capture.Row.SetText("");
+            EndCapture("", "unbound");
+            return;
+        }
 
-        var presses = PressedThisFrame(options.Devices);
+        var presses = PressedThisFrame(options.Devices, eastBinds);
         string pressed = presses.FirstOrDefault(p => p != _captureHeld);
         if (_captureHeld == null)
         {
             if (pressed == null)
                 return;
             _captureLastInput = now;
+            _captureHeldAt = now;
             if (!options.AllowCombinations)
             {
-                Offer(pressed);
+                // A Key entry is a mod's hotkey, read every frame: it is stored when the key is let
+                // go, so the press that sets it can't also trigger it. B is stored when let go too:
+                // held, it cancels.
+                if (_capture.Row.HoldsKey || pressed == East)
+                    _captureHeld = pressed;
+                else
+                    Offer(pressed);
                 return;
             }
             // Two controls down in the same frame (a quick Shift+G): the modifier, or the one listed
@@ -2658,7 +2717,7 @@ internal sealed class ModsTab
             _captureHeld = pressed;
             return;
         }
-        if (pressed != null && pressed != _captureHeld && ControlBinding.IsGamepad(pressed) == ControlBinding.IsGamepad(_captureHeld))
+        if (options.AllowCombinations && pressed != null && pressed != _captureHeld && ControlBinding.IsGamepad(pressed) == ControlBinding.IsGamepad(_captureHeld))
         {
             Offer(ControlBinding.Make(_captureHeld, pressed));
             return;
@@ -2758,8 +2817,19 @@ internal sealed class ModsTab
             }
         }
         if (listening && bound.SummaryText != null)
-            bound.SummaryText.text = Texts.PressButton.Current;
+        {
+            bound.SummaryText.richText = true;
+            bound.SummaryText.text = EastBinds(bound.Row.Options)
+                ? Texts.PressButton.Current + "   " + string.Format(Texts.HoldToCancel.Current, ControlGlyphs.Display(East))
+                : Texts.PressButton.Current;
+        }
     }
+
+    // Whether the row can be given B: then B can't also be its cancel button.
+    private static bool EastBinds(BindingOptions options) =>
+        (options.Devices & BindingDevices.Gamepad) != 0 &&
+        (options.Allowed == null || options.Allowed.Count == 0 || options.Allowed.Contains(East)) &&
+        (options.Reserved == null || !options.Reserved.Contains(East));
 
     // The captions follow the controller in use (Xbox or PlayStation icons).
     private void RefreshGlyphs()
@@ -2778,16 +2848,17 @@ internal sealed class ModsTab
         }
     }
 
-    // The controls of the given devices pressed this frame, modifiers first. B, Esc and Backspace
-    // cancel instead, as on the game's Controls screen, so they are never bound.
-    private static List<string> PressedThisFrame(BindingDevices devices)
+    // The controls of the given devices pressed this frame, modifiers first. Esc and Backspace
+    // cancel instead, as on the game's Controls screen, so they are never bound; nor is B, unless
+    // the row can hold it (east).
+    private static List<string> PressedThisFrame(BindingDevices devices, bool east)
     {
         var pressed = new List<string>();
         if ((devices & BindingDevices.Gamepad) != 0 && Gamepad.current != null)
         {
             foreach (var control in ControlBinding.GamepadControls)
             {
-                if (control != "buttonEast" && ControlBinding.Button(control)?.wasPressedThisFrame == true)
+                if ((east || control != East) && ControlBinding.Button(control)?.wasPressedThisFrame == true)
                     pressed.Add(control);
             }
         }

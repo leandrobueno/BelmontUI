@@ -23,6 +23,7 @@ internal interface ITabHost
     void SetTabs(List<UITab_BS> tabs);
     UITab_BS AddTabComponent(GameObject page);
     void GoTo(UITab_BS tab);
+    void SetTabActive(UITab_BS tab, bool active);
     void UpdateActiveTabCount();
 }
 
@@ -78,6 +79,15 @@ internal sealed class TabHost<TView, TTab> : ITabHost
         var typed = tab.TryCast<TTab>();
         if (typed != null)
             _view.GoToTab(typed);
+    }
+
+    // The game's own way of making a tab unavailable: its toggle stops reacting, the bar's
+    // Previous / Next skip it, and a focused one hands over to the first active tab.
+    public void SetTabActive(UITab_BS tab, bool active)
+    {
+        var typed = tab.TryCast<TTab>();
+        if (typed != null)
+            _view.ChangeTabActivity(typed, active);
     }
 
     public void UpdateActiveTabCount() => _view.UpdateActiveTabCount();

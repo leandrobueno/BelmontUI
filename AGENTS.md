@@ -1,6 +1,6 @@
 # BelmontUI for AI coding agents
 
-BelmontUI is a BepInEx 6 (IL2CPP) library for Castlevania: Belmont's Curse. It adds a **MODS** tab to the game's pause menu and to the title screen's Settings screen. A mod declares its settings once, in `Load()`, and the player gets them in the game's own widgets. This file lets you add that support to a mod without reading BelmontUI's source. Facts are taken from `Settings.cs`, `SettingsMenu.cs`, `SettingRow.cs` and `Plugin.cs` at version 0.4.0. The dll ships `BelmontUI.xml`, so IDE tooltips carry the same descriptions.
+BelmontUI is a BepInEx 6 (IL2CPP) library for Castlevania: Belmont's Curse. It adds a **MODS** tab to the game's pause menu and to the title screen's Settings screen. A mod declares its settings once, in `Load()`, and the player gets them in the game's own widgets. This file lets you add that support to a mod without reading BelmontUI's source. Facts are taken from `Settings.cs`, `SettingsMenu.cs`, `SettingRow.cs` and `Plugin.cs` at version 0.6.1. The dll ships `BelmontUI.xml`, so IDE tooltips carry the same descriptions.
 
 ## Facts
 
@@ -11,7 +11,7 @@ BelmontUI is a BepInEx 6 (IL2CPP) library for Castlevania: Belmont's Curse. It a
 | Public types | `BelmontUi.Settings` (static) and `BelmontUi.SettingsMenu` (builder methods) are the API. `BelmontUiPlugin` (with `Guid`, `Version`) and the `BelmontUiWatcher` component are public but not for consumers. Row types and row lists are internal. |
 | Dll installed at | `<game>\BepInEx\plugins\BelmontUI\BelmontUI.dll` |
 | Target | net6.0, BepInEx 6 IL2CPP (be.788) |
-| Config saved to | the consumer mod's own `BepInEx\config\<mod guid>.cfg`. BelmontUI writes `ConfigEntry.BoxedValue` at once and calls `ConfigFile.Save()` when the player leaves a sub-menu, the tab loses focus or the menu closes. It has no config file of its own. |
+| Config saved to | the consumer mod's own `BepInEx\config\<mod guid>.cfg`. BelmontUI writes `ConfigEntry.BoxedValue` at once and calls `ConfigFile.Save()` when the player leaves a sub-menu, the tab loses focus or the menu closes. Its own `leandrobueno.belmontui.cfg` holds one option, `HideModsTab` (hide Belmont Minimap's MODS tab and show its settings on this tab). |
 
 ## Three rules for the consumer mod
 
@@ -109,7 +109,7 @@ Row kinds and their builder methods:
 | Key | `Key(entry, label, keys, hint)` | `string` | entry, label, keys (Input System `Key` names such as `"F3"`, `"Digit1"`, `"Q"`, `"Mouse4"`) | hint (shown next to the label) |
 | Button | `Button(label, onPress, hint, text)` | none | label, onPress | hint, text (caption, default: label) |
 | Reset | `ResetButton(label, hint, text)` | none | nothing | all have defaults |
-| Binding | `Binding(entry, label, options, hint)` | `string` holding a `ControlBinding` (`"rightShoulder"`, `"rightShoulder+leftShoulder"`, `"F3"`, `""` = unbound) | entry, label | options (`BindingOptions`: Devices, AllowCombinations, Allowed, Reserved, ReservedReason, Validate, TimeoutSeconds), hint (shown next to the label; default: the library's "press a button" line) |
+| Binding | `Binding(entry, label, options, hint)` | `string` holding a `ControlBinding` (`"rightShoulder"`, `"rightShoulder+leftShoulder"`, `"F3"`, `"rightStick/up"` from 0.5.0, `""` = unbound), or from 0.6.0 a `UnityEngine.InputSystem.Key` entry (one keyboard key, `Key.None` = unbound) | entry, label | options (`BindingOptions`: Devices, AllowCombinations, AllowUnbind, Allowed, Reserved, ReservedReason, Validate, TimeoutSeconds), hint (shown next to the label; default: the library's "press a button" line) |
 | Header | `Header(title)` | none | title | nothing |
 | (any row) | `.VisibleWhen(Func<bool>)` after the builder call | - | - | shows the row only while true; re-checked when the menu opens and on every setting change |
 

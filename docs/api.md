@@ -6,7 +6,7 @@ nav_order: 3
 # API reference
 {: .no_toc }
 
-Version 0.4.0. Everything is in the `BelmontUi` namespace. The public surface uses plain .NET types only (`ConfigEntryBase`, `ConfigFile`, strings, numbers, `Action`), so it does not change when the game's interop assemblies are regenerated. The dll ships with `BelmontUI.xml`, so your IDE shows these descriptions as tooltips.
+Version 0.6.1. Everything is in the `BelmontUi` namespace. The public surface uses plain .NET types only (`ConfigEntryBase`, `ConfigFile`, strings, numbers, `Action`), so it does not change when the game's interop assemblies are regenerated. The dll ships with `BelmontUI.xml`, so your IDE shows these descriptions as tooltips.
 
 1. TOC
 {:toc}
@@ -209,7 +209,8 @@ A row where the player picks a button, key or combination by pressing it. `entry
 Selecting the row (A, Enter or a click) shows "Press new button" (the game's own text) and listens:
 
 - A single press and release stores that control. Holding one control and pressing another stores both, held first: `rightShoulder+leftShoulder`. Both controls must be on the same kind of device.
-- B, Esc or Backspace cancel, as on the game's Controls screen (so those three are never bound), and so does `TimeoutSeconds` without input; the old binding stays.
+- Esc or Backspace cancel, as on the game's Controls screen (so those two are never bound), and so does `TimeoutSeconds` without input; the old binding stays.
+- B (`buttonEast`) cancels the same way on a row that can't hold it: a keyboard-only row, a row whose `Allowed` leaves it out, or one that lists it in `Reserved`. From 0.6.1, on a row that can hold it, a tap of B is the new button, holding B for 0.6 s cancels, and the row's line reads "Press new button   Hold B to cancel". Reserve `buttonEast` to keep the old behaviour.
 - A control outside `Allowed` or in `Reserved` shows `ReservedReason` ("Already assigned" by default, the game's own text) on the row's line; a `Validate` callback that returns a reason does the same. The row keeps listening.
 - While the row listens, and until everything is let go, every input action the game has on is switched off, so the press doesn't also navigate, switch tabs or close the menu.
 
@@ -224,6 +225,9 @@ Selecting the row (A, Enter or a click) shows "Press new button" (the game's own
 | `ReservedReason` | "Already assigned" | Shown when a control is refused. |
 | `Validate` | null | `Func<string, LocalizedText>`: null accepts the binding, a text refuses it with that reason. |
 | `TimeoutSeconds` | 10 | Listening stops after this long without input. |
+| `AllowUnbind` | false | From 0.6.0: Delete clears the binding while the row listens (an empty string, or `Key.None`); Delete itself can then not be bound. |
+
+From 0.6.0 the entry may also be a `UnityEngine.InputSystem.Key` enum entry instead of a `string`: the row then takes one keyboard key (no combinations, no mouse buttons), stores it when the key is let go, so a mod that reads the key every frame doesn't see the press that set it, and `RegisterFromConfig` makes such rows for `Key` entries, with `AllowUnbind` on.
 
 ```csharp
 menu.Binding(Plugin.WheelButton, new LocalizedText("Wheel button") { ["fr"] = "Bouton de la roue" },
@@ -254,7 +258,7 @@ menu.Binding(Plugin.WeaponButton, "Weapon button").VisibleWhen(() => !Plugin.Mer
 
 ## `ControlBinding` (static class)
 
-The text format of a binding and helpers to use it in your mod. A binding is one control, or two joined with `+` (held first). Gamepad controls are Input System control names on `Gamepad` (`buttonNorth`, `buttonSouth`, `buttonWest`, `buttonEast`, `leftShoulder`, `rightShoulder`, `leftTrigger`, `rightTrigger`, `leftStickPress`, `rightStickPress`, `select`, `start`, `dpad/up`, `dpad/down`, `dpad/left`, `dpad/right`); keyboard controls are Input System `Key` names plus `Mouse4` / `Mouse5`. Empty means unbound.
+The text format of a binding and helpers to use it in your mod. A binding is one control, or two joined with `+` (held first). Gamepad controls are Input System control names on `Gamepad` (`buttonNorth`, `buttonSouth`, `buttonWest`, `buttonEast`, `leftShoulder`, `rightShoulder`, `leftTrigger`, `rightTrigger`, `leftStickPress`, `rightStickPress`, `select`, `start`, `dpad/up`, `dpad/down`, `dpad/left`, `dpad/right` and, from 0.5.0, the right stick pushed in a direction: `rightStick/up`, `rightStick/down`, `rightStick/left`, `rightStick/right`); keyboard controls are Input System `Key` names plus `Mouse4` / `Mouse5`. Empty means unbound.
 
 | Member | |
 |---|---|
@@ -321,4 +325,4 @@ A control writes its `ConfigEntry` the moment it changes, so your mod's `Setting
 
 ## `BelmontUiPlugin`
 
-The plugin class. `BelmontUiPlugin.Guid` is `"leandrobueno.belmontui"` and `BelmontUiPlugin.Version` is `"0.4.0"`. Copy the GUID string into a constant of your own instead, as the examples do. That keeps every `BelmontUi.*` reference out of your plugin class.
+The plugin class. `BelmontUiPlugin.Guid` is `"leandrobueno.belmontui"` and `BelmontUiPlugin.Version` is `"0.6.1"`. Copy the GUID string into a constant of your own instead, as the examples do. That keeps every `BelmontUi.*` reference out of your plugin class.

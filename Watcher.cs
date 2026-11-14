@@ -58,6 +58,8 @@ public class BelmontUiWatcher : MonoBehaviour
                     plugins.Keys.Any(k => k.IndexOf("minimap", StringComparison.OrdinalIgnoreCase) >= 0);
                 BelmontUiPlugin.Logger.LogInfo(
                     $"[ui] Belmont Minimap {(_minimapPresent.Value ? "is" : "is not")} installed ({plugins.Count} plugins loaded)");
+                if (_minimapPresent.Value)
+                    MinimapBridge.Start();
             }
 
             int scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().handle;

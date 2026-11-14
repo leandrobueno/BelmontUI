@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using BepInEx.Configuration;
+using UnityEngine.InputSystem;
 
 namespace BelmontUi;
 
@@ -290,8 +291,9 @@ public sealed class SettingsMenu
     /// <remarks>
     /// The binding shows as the game's own button icons for the controller in use (Xbox or PlayStation,
     /// switching when the player changes controller) and as key names for the keyboard. While the row
-    /// listens, the menu's own buttons do nothing. B, Esc or Backspace cancel and keep the old binding, as on
-    /// the game's Controls screen (so those three are never bound), and so does the timeout. Read the binding in your mod with <see cref="ControlBinding.WasPressedThisFrame"/> or
+    /// listens, the menu's own buttons do nothing. Esc or Backspace cancel and keep the old binding, as on
+    /// the game's Controls screen (so those two are never bound), and so does the timeout. B cancels too,
+    /// unless the row can hold B: then a tap of B is the new button and holding B cancels. Read the binding in your mod with <see cref="ControlBinding.WasPressedThisFrame"/> or
     /// <see cref="ControlBinding.IsHeld"/>.
     /// </remarks>
     /// <exception cref="ArgumentException">The label is empty, or the entry is null or not a string.</exception>
@@ -305,13 +307,24 @@ public sealed class SettingsMenu
     /// <param name="hint">A short line shown next to the label, per language; null shows the library's.</param>
     /// <returns>This menu, for chaining.</returns>
     /// <exception cref="ArgumentException">The label is empty, or the entry is null or not a string.</exception>
-    public SettingsMenu Binding(ConfigEntryBase entry, LocalizedText label, BindingOptions options = null, LocalizedText hint = null) =>
-        Add(new SettingRow
+    public SettingsMenu Binding(ConfigEntryBase entry, LocalizedText label, BindingOptions options = null, LocalizedText hint = null)
+    {
+        // A Key entry can only hold one keyboard key.
+        if (entry != null && entry.SettingType == typeof(Key))
+        {
+            options ??= new BindingOptions();
+            options.Devices = BindingDevices.Keyboard;
+            options.AllowCombinations = false;
+            options.Reserved = (options.Reserved ?? Array.Empty<string>()).Concat(ControlBinding.MouseControls).ToArray();
+            hint ??= options.AllowUnbind ? Texts.KeyHintUnbind : Texts.BindingHintSingle;
+        }
+        return Add(new SettingRow
         {
             Kind = RowKind.Binding, BindsTo = entry, LabelText = label,
             HintText = hint ?? (options == null || options.AllowCombinations ? Texts.BindingHint : Texts.BindingHintSingle),
             Options = options ?? new BindingOptions(), Sound = ButtonSound.None,
         });
+    }
 
     /// <summary>Adds a title line that groups the rows after it. It has no control and is skipped by Up / Down.</summary>
     /// <param name="title">The title.</param>

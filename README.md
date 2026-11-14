@@ -78,9 +78,9 @@ menu.Binding(Plugin.WheelButton, "Wheel button", new BindingOptions
 if (ControlBinding.WasPressedThisFrame(Plugin.WheelButton.Value)) { ... }
 ```
 
-- Select the row (A, Enter or a click): it shows "Press new button" (the game's own text) and listens. A single press and release stores that control; holding one and pressing another stores both as a combination. B, Esc or Backspace cancel and keep the old binding, as on the game's Controls screen (so those three can't be bound), and so does the timeout (10 s without input). While the row listens, the menu's own buttons do nothing.
+- Select the row (A, Enter or a click): it shows "Press new button" (the game's own text) and listens. A single press and release stores that control; holding one and pressing another stores both as a combination. Esc or Backspace cancel and keep the old binding, as on the game's Controls screen (so those two can't be bound), and so does the timeout (10 s without input). B cancels too on a row that can't hold it; on a row that can (from 0.6.1), a tap of B is the new button and holding B cancels, and the row says so ("Hold B to cancel"). While the row listens, the menu's own buttons do nothing.
 - Stored format (`ControlBinding`): gamepad controls are Input System control names (`buttonSouth`, `leftShoulder`, `rightTrigger`, `leftStickPress`, `select`, `start`, `dpad/up`, ...); keys are Input System `Key` names (`Digit1`, `F3`) plus `Mouse4` / `Mouse5`; a combination is `held+pressed` (`rightShoulder+leftShoulder`); empty means unbound.
-- `BindingOptions`: `Devices`, `AllowCombinations` (default true), `Allowed` and `Reserved` control lists, `ReservedReason`, `Validate` (return null to accept, or the reason shown on the row; the row keeps listening), `TimeoutSeconds`.
+- `BindingOptions`: `Devices`, `AllowCombinations` (default true), `AllowUnbind` (Delete clears the binding), `Allowed` and `Reserved` control lists, `ReservedReason`, `Validate` (return null to accept, or the reason shown on the row; the row keeps listening), `TimeoutSeconds`.
 - `ControlBinding` also has `Parse`, `Make`, `IsValid`, `IsHeld`, `WasPressedThisFrame`, `Describe` (plain text) and `Display` (TMP rich text with the game's icons).
 - `Header(title)` adds a title line that groups the rows after it.
 
@@ -182,7 +182,7 @@ Every lookup is by component type, not by object name, and any failure logs `[ui
 ## Compatibility
 
 - **Always last.** BelmontUI's MODS tab is kept as the last entry of the bar's `tabs`, the last sibling in the toggle row and the last toggle in the toggle group, on both the pause menu and the title screen's Settings. Every poll, if another mod has added a tab after ours, ours is moved back to the end (array, sibling order, navigation index) without touching anyone else's tab; the log gets `[ui] tab moved to the end of 'TabsLayout_GameMenu' (after 'X')` at debug level.
-- **Belmont Minimap.** That mod adds its MODS tab only to a pause-menu bar that still has exactly the five native tabs, so the bar is left alone until its `TabContent_MODS` tab is there, or for 20 seconds after the bar initialised with the menu closed. Whether Minimap is installed is decided on the first poll, not at load (this plugin loads before it). If Minimap rewrites the tab array later, ours is put back after its tab.
+- **Belmont Minimap.** That mod adds its MODS tab only to a pause-menu bar that still has exactly the five native tabs, so the bar is left alone until its `TabContent_MODS` tab is there, or for 20 seconds after the bar initialised with the menu closed. Whether Minimap is installed is decided on the first poll, not at load (this plugin loads before it). If Minimap rewrites the tab array later, ours is put back after its tab. With the option **Hide Belmont Minimap's MODS tab** on (off by default; on the tab's own **Belmont UI** page, which only shows with Minimap installed, or `HideModsTab` in `BepInEx\config\leandrobueno.belmontui.cfg`), Minimap's tab is hidden and its settings are shown on BelmontUI's tab instead, as a **Belmont Minimap** page. The page is built from Minimap's own list of menu rows, read by reflection (labels in English and Simplified Chinese, as that mod ships them), or from its config entries if that list can't be read. The tab is not removed: it is made inactive with the game's `UITabView.ChangeTabActivity`, which the bar's Previous / Next skip, and its button is hidden. The option is read when the game starts. Pages that other mods put on Minimap's tab through its provider contract are hidden with it.
 - **Game updates.** Every lookup is by component type; any failure logs `[ui] MODS tab not added: ...` and leaves the menu as it was.
 
 ## Building
@@ -190,6 +190,11 @@ Every lookup is by component type, not by object name, and any failure logs `[ui
 Needs the .NET SDK and the game with BepInEx 6 (IL2CPP, be.788) installed and started once, so the interop assemblies exist. `dotnet build -c Release` builds the library and copies `BelmontUI.dll` and `BelmontUI.xml` into the game's `BepInEx/plugins/BelmontUI`. If the game isn't in the default Steam folder, add `-p:GameDir="<game folder>"`. Consumers reference `BepInEx/plugins/BelmontUI/BelmontUI.dll` from there, so build this project first.
 
 ## Changelog
+
+- **0.6.1**: binding rows can be given B (Circle): on a row that accepts it, a tap of B is the new button and holding B cancels. Before, B always cancelled, so a row could never be set to it.
+- **0.6.0**: with Belmont Minimap installed, a new option hides that mod's own MODS tab and shows its settings on this tab instead (the tab's **Belmont UI** page; off by default, applies at the next game start). Binding rows also take a `Key` enum entry (one keyboard key, stored when the key is let go), and `BindingOptions.AllowUnbind` lets Delete clear a binding. A description no longer overlaps a long label on a row that was off-screen when its page opened. 0.5 mods keep working unchanged.
+
+- **0.5.0**: binding rows also take the right stick pushed in a direction (`rightStick/up`, `/down`, `/left`, `/right`), shown with the game's own stick icons. 0.4 mods keep working unchanged.
 
 - **0.4.0**: binding rows (`Binding`, `BindingOptions`, `ControlBinding`): the player presses a button, key or combination to bind it, shown with the game's own Xbox / PlayStation icons; section headers (`Header`). Texts in all eleven languages. 0.3 mods keep working unchanged.
 

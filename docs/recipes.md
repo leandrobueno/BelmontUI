@@ -99,7 +99,7 @@ menu.Binding(Plugin.WheelButton, "Wheel button", new BindingOptions
 }, "Select, then press the button to hold for the wheel.");
 ```
 
-The row shows the game's icon for the button, Xbox or PlayStation as the game chooses. The player selects it, sees "Press new button" and presses a button; Start and Select are refused with "Already assigned" and the row keeps listening. B cancels, and so does 10 seconds without input.
+The row shows the game's icon for the button, Xbox or PlayStation as the game chooses. The player selects it, sees "Press new button" and presses a button; Start and Select are refused with "Already assigned" and the row keeps listening. A tap of B picks B and holding B cancels (on a row that can't be set to B, B cancels at once), and so does 10 seconds without input.
 
 To read it while playing, call `ControlBinding` through your glue class, since it is a BelmontUI type:
 

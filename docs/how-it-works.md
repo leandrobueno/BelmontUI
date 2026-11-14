@@ -38,6 +38,8 @@ Belmont Minimap (`local.belmont.minimap`) adds a MODS tab only to a pause-menu b
 
 Whether Minimap is installed is decided on the first poll, not at load: BelmontUI loads before Minimap, so the plugin list is incomplete during its own `Load()`.
 
+With the option **Hide Belmont Minimap's MODS tab** on (off by default; on the tab's own **Belmont UI** page, which only shows with Minimap installed, or `HideModsTab` in `BepInEx\config\leandrobueno.belmontui.cfg`), Minimap's tab is hidden and its settings are shown on BelmontUI's tab instead, as a **Belmont Minimap** page. The page is built from Minimap's own list of menu rows, read by reflection (labels in English and Simplified Chinese, as that mod ships them), or from its config entries if that list can't be read. The tab is not removed: it is made inactive with the game's `UITabView.ChangeTabActivity`, which the bar's Previous / Next skip, and its button is hidden. The option is read when the game starts. Pages that other mods put on Minimap's tab through its provider contract are hidden with it.
+
 ## Cloning the native widgets
 
 1. **The page** is a copy of the Settings screen's GAMEPLAY tab, or any settings tab when that is missing. Its scroll area and navigation group stay; its rows and settings logic go. The title becomes "MODS" and the long note is cleared. On the pause menu, the content moves into a shell copied from the last native pause-menu page, so it shows and hides like its neighbours.
@@ -65,7 +67,7 @@ On every rebuild, BelmontUI builds all rows at once: one list row per registered
 - **Listening.** Pressing a binding row puts "Press new button" (the game's own text) on its line and "..." on its button, and switches off every input action the game has on, so the press doesn't also navigate, switch tabs or close the menu. Exactly the actions it switched off are switched on again afterwards. The log gets `[ui] <guid>: '<label>' listening (<devices>, was '<binding>')`.
 - **Reading.** The controls are read straight from the devices (`Gamepad.current`, every key of `Keyboard.current`, the mouse's back and forward buttons), not through the game's actions. The press that opened the row must be let go first; a control the Input System still reports as down after 2 seconds is ignored.
 - **Combinations.** A control pressed and released alone is stored as it is. A second control pressed while the first is held stores both, held first: `rightShoulder+leftShoulder`. Two controls pressed in the same frame (a quick Shift+G) make a combination too, with the modifier key as the held one. Both controls must be on the same kind of device.
-- **Cancel and timeout.** B, Esc or Backspace cancel, like the game's Controls screen, so those three can't be bound by pressing them. `TimeoutSeconds` (10 by default) without input cancels too. The old binding stays either way.
+- **Cancel and timeout.** Esc or Backspace cancel, like the game's Controls screen, so those two can't be bound by pressing them. B cancels at once on a row that can't hold it (`Allowed` without `buttonEast`, `Reserved` with it, or a keyboard-only row). On a row that can, B is stored when it is let go, like a `Key` entry's key, and cancels when held for 0.6 s; the row's line then adds "Hold B to cancel" with the controller's icon. `TimeoutSeconds` (10 by default) without input cancels too. The old binding stays either way.
 - **Checks.** A control outside `Allowed`, in `Reserved`, or refused by `Validate` shows the reason on the row's line, and the row listens again once everything is let go. A `Validate` that throws refuses the binding and logs the error.
 - **Afterwards.** The binding is written to the entry, the log gets `[ui] <guid>: '<label>' bound: '<binding>'` (or `cancelled`, `no input in time`), and the menu gets its input back once the controls are let go, or after 2 seconds in any case.
 
@@ -89,7 +91,7 @@ The tab listens to `SettingChanged` on every config file bound to it. When an en
 - Config files are written to disk when the player leaves a mod's sub-menu (that mod's files), when the tab loses focus, when the menu closes, and when `ResetAll()` or `Save()` is called.
 - On the title screen's Settings screen, the tab reports no pending changes, so the game's apply / discard flow never asks about it.
 
-Each mod's values go to its own `BepInEx\config\<guid>.cfg`. BelmontUI has no config file.
+Each mod's values go to its own `BepInEx\config\<guid>.cfg`. BelmontUI's own file, `leandrobueno.belmontui.cfg`, holds only the Minimap option above.
 
 ## What breaks on game updates, and how it fails
 
